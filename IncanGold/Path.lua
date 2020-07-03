@@ -1,8 +1,8 @@
 function getTags(description)
-	--Inputs:
-	--description:	string
+    --Inputs:
+    --description:	string
     --      A string with #tags delimited by spaces
-	--Outputs:
+    --Outputs:
     --fail | bool: false
     --      There were no tags
     --success | table: values
@@ -28,11 +28,12 @@ end
 
 function onCollisionEnter( info )
     derp = info.collision_object
-    if self.is_face_down == false then
+    if derp.is_face_down == false then
         _descTags = getTags(derp.getDescription())
         if _descTags ~= false then
             for i, v in ipairs(_descTags) do
                 if setColorBasedOnCardType(v) == true then
+                    derp.setLock(true)
                    return true
                 end
             end
@@ -42,20 +43,20 @@ end
 
 function setColorBasedOnCardType(cardType)
     --Inputs:
-	--cardType:	string
+    --cardType:	string
     --      The tag with a card type
-	--Outputs:
+    --Outputs:
     --fail | bool: false
     --      Colour not changed
     --success | bool: true
     --      Colour changed
     if cardType == "" then
         return false
-    elseif cardType == "#hazzard" then
+    elseif cardType == "#hazard" then
         return setColor(self,"Red")
     elseif cardType == "#gem" then
         return setColor(self,"Teal")
-    elseif cardType == "#artefact" then
+    elseif cardType == "#artifact" then
         return setColor(self,"Yellow")
     end
     return false
