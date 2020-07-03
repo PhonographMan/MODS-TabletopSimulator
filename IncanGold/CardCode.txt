@@ -1,0 +1,15 @@
+function onCollisionEnter( info )
+    derp = info.collision_object
+    if self.is_face_down == false then
+    if derp.getDescription() == "Path" then
+        derp.setColorTint( stringColorToRGB( 'Pink' ) )
+    end
+    end
+end
+
+function onCollisionExit( info )
+    derp = info.collision_object
+    --if derp.getDescription() == "Path" then
+        derp.setColorTint( stringColorToRGB( 'White' ) )
+    --end
+end
