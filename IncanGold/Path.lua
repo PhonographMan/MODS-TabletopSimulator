@@ -1,7 +1,10 @@
-function getTags(description)
+function getTags(description, requiredElement)
     --Inputs:
     --description:	string
     --      A string with #tags delimited by spaces
+    --requiredElement: string
+    --      The prefix required to count the tag.
+    --      Blank means no tag
     --Outputs:
     --fail | bool: false
     --      There were no tags
@@ -14,11 +17,19 @@ function getTags(description)
     _returnArray = {}
     _numberOfElements = 1
     for tag in _stringSplit do
-        if string.sub(tag,1,1) == "#" then
-            print(tag)
-            _returnArray[_numberOfElements] = tag
-            _numberOfElements = _numberOfElements + 1
+        if tag ~= nil and requiredElement ~= nil then
+            if requiredElement == "" then
+                _returnArray[_numberOfElements] = tag
+                _numberOfElements = _numberOfElements + 1
+                --print(tag)
+            elseif string.len(tag) > string.len(requiredElement) then
+                if string.sub(tag,1,string.len(requiredElement)) ==    requiredElement then
+                    --print(tag)
+                    _returnArray[_numberOfElements] = tag
+                    _numberOfElements = _numberOfElements + 1
+                end
             end
+        end
     end
     if _numberOfElements == 1 then
         return false
@@ -29,7 +40,7 @@ end
 function onCollisionEnter( info )
     derp = info.collision_object
     if derp.is_face_down == false then
-        _descTags = getTags(derp.getDescription())
+        _descTags = getTags(derp.getDescription(),"#")
         if _descTags ~= false then
             for i, v in ipairs(_descTags) do
                 if setColorBasedOnCardType(v) == true then
