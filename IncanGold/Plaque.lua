@@ -7,8 +7,11 @@ m_iBtnSmoothMovementButton = -1 --SmoothMovement
 
 m_tbGUIDinDescription = {} -- Tags in Description
 
---Deck Recovery
-m_bNeedRecovery = false
+--Game Vars
+m_iHazzardsCards_count = 0
+m_tbHazzardsRemoved = {}
+m_iRoundNumber = 0
+m_iNumberOfHazzardsOutOfDeck = 0
 
 --Round Vars
 m_bRoundIsOn = false
@@ -24,9 +27,11 @@ m_bRoundOverDueToHazzards = false
 m_sRoundOverDueToHazzard = ""
 m_iDealtCards_count = 0
 m_tbDealtCards = {}
-m_iNumberOfHazzardsOutOfDeck = 0
 m_iDontFlipNumber_0 = -1
 m_bReadyForNextCard = false
+
+--Deck Recovery
+m_bNeedRecovery = false
 
 --Options
 m_bDeckHidden = false --State of Deck
@@ -44,16 +49,28 @@ function onLoad()
     m_iCurrentPath = 2
     
     resetRound()
+    setDeckButtonLabel("Setup next game")
+    --setupDebugTimer()
 end
 
-function onCollisionEnter( info )
+function onCollisionEnter(info)
+    local derp = info.collision_object
     if m_bNeedRecovery then
-        deckRecovery(info)
+        deckRecovery(derp)
     end
 end
 
 function mainButton()
-    if m_bRoundIsOn then
+    if m_iRoundNumber == 0 then
+        m_iRoundNumber = m_iRoundNumber + 1
+        mergeHazardCardsToMainDeck()
+        hazardCardsEmpty()
+        retractAllCardsToDeck()
+        dealtCardsEmpty()
+        resetRound()
+        setDeckButtonLabel("Start new round")
+        
+    elseif m_bRoundIsOn then
         if m_bReadyForNextCard == true then
             if m_bShuffleBeforeDeal then
                 mainDeckShuffle()
@@ -61,15 +78,20 @@ function mainButton()
             end
             if dealCardInRound() >= 5 then
                 m_bRoundIsOn = false
-                setDeckButtonLabel("Start new round")
+                m_iRoundNumber = m_iRoundNumber + 1
+                if m_iRoundNumber >= 6 then
+                    setDeckButtonLabel("Setup next game")
+                    m_iRoundNumber = 0
+                else
+                    setDeckButtonLabel("Start new round")
+                end
+            else
+                setDeckButtonLabel("Deal")
             end
         else
             printToAll("Wooah there buddy. Slow that click down a little.")
         end
     else
-
-        --
-    
         if retractAllCardsToDeck() then
             if m_bRoundOverDueToHazzards then
                 moveDoubleHazzardsToBottom(m_sRoundOverDueToHazzard)
@@ -217,7 +239,7 @@ function roundCardTypeCheck(cardDescription)
     return ""
 end
 
-function roundHazzardSpecificCheck(cardDescription, addToTotals)
+function roundHazzardSpecificCheck(cardDescription, addToTotals, storeResult)
     if cardDescription == "" then
         return false
     end
@@ -227,25 +249,40 @@ function roundHazzardSpecificCheck(cardDescription, addToTotals)
             if addToTotals then
                 m_iNumberOfHazzards_Snake = m_iNumberOfHazzards_Snake + 1
             end
+            if storeResult then
+                hazardCardsStore(v)
+            end
             return "snake"
         elseif v == "#mummy" then
             if addToTotals then
                 m_iNumberOfHazzards_Mummy = m_iNumberOfHazzards_Mummy + 1
+            end
+            if storeResult then
+                hazardCardsStore(v)
             end
             return "mummy"
         elseif v == "#boulder" then
             if addToTotals then
                 m_iNumberOfHazzards_Boulder = m_iNumberOfHazzards_Boulder + 1
             end
+            if storeResult then
+                hazardCardsStore(v)
+            end
             return "boulder"
         elseif v == "#fire" then
             if addToTotals then
                 m_iNumberOfHazzards_Fire = m_iNumberOfHazzards_Fire + 1
             end
+            if storeResult then
+                hazardCardsStore(v)
+            end
             return "fire"
         elseif v == "#spider" then
             if addToTotals then
                 m_iNumberOfHazzards_Spider = m_iNumberOfHazzards_Spider + 1
+            end
+            if storeResult then
+                hazardCardsStore(v)
             end
             return "spider"
         end
@@ -282,6 +319,7 @@ function markDoubleHazzards(hazzardType)
         if hazzardTag == hazzardType then
             if m_iDontFlipNumber_0 == -1 then
                 m_iDontFlipNumber_0 = i
+                hazardCardsStore(v)
                 return true
             end
         end
@@ -333,6 +371,23 @@ function dealtCardsEmpty()
     return true
 end
 
+function hazardCardsStore(_card)
+    if _card == nil then
+        return false
+    end
+    m_iHazzardsCards_count = m_iHazzardsCards_count + 1
+    m_tbHazzardsRemoved[m_iHazzardsCards_count] = _card
+    return true
+end
+
+function hazardCardsEmpty()
+    m_iHazzardsCards_count = 0
+    m_tbHazzardsRemoved = {}
+    return true
+end
+
+--
+
 function retractAllCardsToDeck()
     local deck = getDeckObject()
     if deck == false then
@@ -351,6 +406,28 @@ function retractAllCardsToDeck()
             end
         end
     end
+    return true
+end
+
+function mergeHazardCardsToMainDeck()
+    local deck = getDeckObject()
+    if deck == false then
+        return false
+    end
+    local vec = deck.getPosition()
+    vec[2] = vec[2] + 1
+    for i, v in ipairs(m_tbHazzardsRemoved) do
+        if v ~= nil then
+            v.setLock(false)
+            flipCardFaceDown(v)
+            if m_bSmoothMovement then
+                v.setPositionSmooth(vec,  false,  true)
+            else
+                v.setPosition(vec)
+            end
+        end
+    end
+    m_iNumberOfHazzardsOutOfDeck = 0
     return true
 end
 
@@ -374,6 +451,7 @@ function moveDoubleHazzardsToBottom(hazzardType)
             else
                 v.setPosition(vec)
             end
+            
             hazzardType = "#nothing" --Only one hazzard is moved
         end
     end
@@ -449,9 +527,15 @@ function getDeckObject()
     else
         local deck = getObjectFromGUID(m_tbGUIDinDescription[1])
         if deck == nil then
+            if findDeckUsingCollider() then
+                return m_objMainDeck
+            end
             printToAll("Could not find deck. If this keeps happenning drop the deck on the Plaque so I can find it.")
             m_bNeedRecovery = true
             return false
+        end
+        if findDeckUsingCollider() then
+            return m_objMainDeck
         end
         m_objMainDeck = deck
         m_bNeedRecovery = false
@@ -459,9 +543,14 @@ function getDeckObject()
     end
 end
 
-function deckRecovery(info)
-    derp = info.collision_object
-    local objectsInObj = derp.getObjects()
+function deckRecovery(obj)
+    if obj == nil then
+        return false
+    end
+    if obj.getQuantity() == -1 then --Not a deck
+        return false
+    end
+    local objectsInObj = obj.getObjects()
     local cardTags 
     for i, v in ipairs(objectsInObj) do
         cardTags = getTags(v.description,"#")
@@ -469,13 +558,14 @@ function deckRecovery(info)
             if getCardTypeFromSingleTag(w) ~= false then
                 --Basically there is a playing card which we think
                 --is part of the main deck in this deck
-                m_objMainDeck = derp
+                m_objMainDeck = obj
                 m_bNeedRecovery = false
                 printToAll("Found the deck! Thank you. Clicking too quickly can cause me to lose it.")
                 return true
             end
         end
     end
+    return false
 end
 
 function getNextFreeHazzardPlacementObject()
@@ -600,4 +690,39 @@ function createSmoothMovementButton()
     --Set reference
     m_iBtnSmoothMovementButton = m_btnNumberOfButtons
     m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function setupDebugTimer()
+    timerID = self.getGUID()..math.random(9999999999999)
+    --Start timer which repeats forever, running countItems() every second
+    Timer.create({
+        identifier=timerID,
+        function_name="findItemsWhereMainDeckShouldBe", function_owner=self,
+        repetitions=0, delay=1
+    })
+end
+
+function findDeckUsingCollider()
+    local objects = findItemsWhereMainDeckShouldBe()
+    for _, entry in ipairs(objects) do
+        if deckRecovery(entry.hit_object) then
+            return true
+        end
+    end
+    return false
+end
+
+function findItemsWhereMainDeckShouldBe()
+    --Find scaling factor
+    local scale = self.getScale()
+    --Set position for the sphere
+    local pos = self.getPosition()
+    pos.z = pos.z + 22.5
+    pos.x = pos.x + 5.5
+    pos.y=pos.y+(1.25*scale.y)
+    --Ray trace to get all objects
+    return Physics.cast({
+        origin=pos, direction={0,1,0}, type=2, max_distance=0,
+        size={5*scale.x,7.4*scale.y,5.4*scale.z}, debug=true
+    })
 end
