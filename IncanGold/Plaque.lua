@@ -1,11 +1,14 @@
-m_bDeckHidden = false --State of Deck
 m_objMainDeck = nil -- The Main Deck
 
 m_btnNumberOfButtons = 0
 m_iBtnDeal = -1 --Deal Button
 m_iBtnShowHideButton = -1 --Deal Button
+m_iBtnSmoothMovementButton = -1 --SmoothMovement
 
 m_tbGUIDinDescription = {} -- Tags in Description
+
+--Deck Recovery
+m_bNeedRecovery = false
 
 --Round Vars
 m_bRoundIsOn = false
@@ -23,12 +26,19 @@ m_iDealtCards_count = 0
 m_tbDealtCards = {}
 m_iNumberOfHazzardsOutOfDeck = 0
 m_iDontFlipNumber_0 = -1
-m_iDontFlipNumber_1 = -1
+m_bReadyForNextCard = false
+
+--Options
+m_bDeckHidden = false --State of Deck
+m_bSmoothMovement = false--Movecards smoothly
 
 function onLoad()
     createMainButton()
     createShowHideButton()
+    createSmoothMovementButton()
     --setDeckHidden(false)
+    
+    setSmoothMovement(false)
     
     m_tbGUIDinDescription = getTags(self.getDescription(),"")
     m_iCurrentPath = 2
@@ -36,15 +46,25 @@ function onLoad()
     resetRound()
 end
 
+function onCollisionEnter( info )
+    if m_bNeedRecovery then
+        deckRecovery(info)
+    end
+end
+
 function mainButton()
     if m_bRoundIsOn then
-        if m_bShuffleBeforeDeal then
-            mainDeckShuffle()
-            m_bShuffleBeforeDeal = false
-        end
-        if dealCardInRound() >= 5 then
-            m_bRoundIsOn = false
-            setDeckButtonLabel("Start new round")
+        if m_bReadyForNextCard == true then
+            if m_bShuffleBeforeDeal then
+                mainDeckShuffle()
+                m_bShuffleBeforeDeal = false
+            end
+            if dealCardInRound() >= 5 then
+                m_bRoundIsOn = false
+                setDeckButtonLabel("Start new round")
+            end
+        else
+            printToAll("Wooah there buddy. Slow that click down a little.")
         end
     else
 
@@ -60,6 +80,10 @@ function mainButton()
             setDeckButtonLabel("Deal")
         end
     end
+end
+
+function CALLBACKcardhitpath(card)
+    m_bReadyForNextCard = true
 end
 --de1e9e
 --3a7ba4 643121 7fd96c 35cf3f 414af8 d2ffb3 42ff95 452a15 4c5d92 ab0899 3e74c7 301212 44549d 135447 5894ba 6ff4eb c884fc 59b770
@@ -91,8 +115,12 @@ function dealCardInRound()
     local vec = nextPath.getPosition()
     vec[2] = vec[2] + 0.5
     flipCardFaceUp(card, true)
-    card.setPositionSmooth(vec,  false,  true)
-    
+    if m_bSmoothMovement then
+        card.setPositionSmooth(vec,  false,  true)
+    else
+        card.setPosition(vec)
+    end
+    m_bReadyForNextCard = false
     
     local cardType = roundCardTypeCheck(card.getDescription())
     if cardType ~= false and cardType ~= "" then
@@ -136,8 +164,8 @@ function resetRound()
     m_iCurrentPath = 2
     m_sRoundOverDueToHazzard = ""
     m_iDontFlipNumber_0 = -1
-    m_iDontFlipNumber_1 = -1
     resetAllPathColors()
+    m_bReadyForNextCard = true
     return true
 end
 
@@ -254,8 +282,6 @@ function markDoubleHazzards(hazzardType)
         if hazzardTag == hazzardType then
             if m_iDontFlipNumber_0 == -1 then
                 m_iDontFlipNumber_0 = i
-            elseif m_iDontFlipNumber_1 == -1 then
-                m_iDontFlipNumber_1 = i
                 return true
             end
         end
@@ -315,10 +341,14 @@ function retractAllCardsToDeck()
     local vec = deck.getPosition()
     vec[2] = vec[2] + 1
     for i, v in ipairs(m_tbDealtCards) do
-        if v ~= nil and m_iDontFlipNumber_0 ~= i and m_iDontFlipNumber_1 ~= i then
+        if v ~= nil and m_iDontFlipNumber_0 ~= i then
             v.setLock(false)
             flipCardFaceDown(v)
-            v.setPositionSmooth(vec,  false,  true)
+            if m_bSmoothMovement then
+                v.setPositionSmooth(vec,  false,  true)
+            else
+                v.setPosition(vec)
+            end
         end
     end
     return true
@@ -339,11 +369,23 @@ function moveDoubleHazzardsToBottom(hazzardType)
         if hazzardTag == hazzardType then
             v.setLock(false)
             flipCardFaceUp(v)
-            v.setPositionSmooth(vec,  false,  true)
-            --m_tbDealtCards[i] = nil
+            if m_bSmoothMovement then
+                v.setPositionSmooth(vec,  false,  true)
+            else
+                v.setPosition(vec)
+            end
+            hazzardType = "#nothing" --Only one hazzard is moved
         end
     end
     m_iNumberOfHazzardsOutOfDeck = m_iNumberOfHazzardsOutOfDeck + 1
+end
+
+function toggleSmoothMovement()
+    if m_bSmoothMovement then
+        setSmoothMovement(false)
+    else
+        setSmoothMovement(true)
+    end
 end
 
 function setDeckHidden(newValue)
@@ -355,11 +397,30 @@ function setDeckHidden(newValue)
     if newValue then --Hide Deck
         m_bDeckHidden = true
         deck.setInvisibleTo(getSeatedPlayers())
-        setShowHideButtonLabel("Show Deck")
+        setShowHideButtonLabel("Hide Deck")
     else --Show Deck
         m_bDeckHidden = false
         deck.setInvisibleTo()
-        setShowHideButtonLabel("Hide Deck")
+        setShowHideButtonLabel("Show Deck")
+    end
+end
+
+function setSmoothMovement(newValue)
+    if newValue then --Hide Deck
+        m_bSmoothMovement = true
+        setSmoothMovementButtonLabel("Smooth Movement")
+    else --Show Deck
+        m_bSmoothMovement = false
+        setSmoothMovementButtonLabel("Instant Movement")
+    end
+end
+
+function setSmoothMovementButtonLabel(newValue)
+    if m_iBtnShowHideButton ~= -1 then
+        local button_parameters = {}
+        button_parameters.index = m_iBtnSmoothMovementButton
+        button_parameters.label = newValue
+        self.editButton(button_parameters)
     end
 end
 
@@ -383,15 +444,37 @@ end
 
 function getDeckObject()
     if m_objMainDeck ~= nil then
+        m_bNeedRecovery = false
         return m_objMainDeck
     else
         local deck = getObjectFromGUID(m_tbGUIDinDescription[1])
         if deck == nil then
-            printToAll("Could not find deck")
+            printToAll("Could not find deck. If this keeps happenning drop the deck on the Plaque so I can find it.")
+            m_bNeedRecovery = true
             return false
         end
         m_objMainDeck = deck
+        m_bNeedRecovery = false
         return m_objMainDeck
+    end
+end
+
+function deckRecovery(info)
+    derp = info.collision_object
+    local objectsInObj = derp.getObjects()
+    local cardTags 
+    for i, v in ipairs(objectsInObj) do
+        cardTags = getTags(v.description,"#")
+        for j, w in ipairs(cardTags) do
+            if getCardTypeFromSingleTag(w) ~= false then
+                --Basically there is a playing card which we think
+                --is part of the main deck in this deck
+                m_objMainDeck = derp
+                m_bNeedRecovery = false
+                printToAll("Found the deck! Thank you. Clicking too quickly can cause me to lose it.")
+                return true
+            end
+        end
     end
 end
 
@@ -406,6 +489,27 @@ function getNextFreeHazzardPlacementObject()
         return false
     end
     return nextFreeHazzard
+end
+
+function getCardTypeFromSingleTag(cardType)
+    --Inputs:
+    --cardType:	string
+    --      The tag with a card type
+    --Outputs:
+    --fail | bool: false
+    --      Colour not changed
+    --success | bool: true
+    --      Colour changed
+    if cardType == "" then
+        return false
+    elseif cardType == "#hazard" then
+        return "hazard"
+    elseif cardType == "#gem" then
+        return "gem"
+    elseif cardType == "#artifact" then
+        return "artifact"
+    end
+    return false
 end
 
 function getTags(description, requiredElement)
@@ -478,5 +582,22 @@ function createShowHideButton()
     self.createButton(button_parameters)
     --Set reference
     m_iBtnShowHideButton = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function createSmoothMovementButton()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "toggleSmoothMovement"
+    button_parameters.function_owner = self
+    button_parameters.position = {-5.6,0,-24}
+    button_parameters.label = "Show/Hide"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnSmoothMovementButton = m_btnNumberOfButtons
     m_btnNumberOfButtons = m_btnNumberOfButtons + 1
 end

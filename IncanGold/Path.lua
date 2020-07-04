@@ -1,3 +1,9 @@
+m_tbDescriptionTags = {}
+
+function onLoad()
+    m_tbDescriptionTags = getTags(self.getDescription(),"")
+end
+
 function getTags(description, requiredElement)
     --Inputs:
     --description:	string
@@ -45,11 +51,26 @@ function onCollisionEnter( info )
             for i, v in ipairs(_descTags) do
                 if setColorBasedOnCardType(v) == true then
                     derp.setLock(true)
+                    local plaque = getPlaqueObject()
+                    if plaque ~= false then
+                        plaque.call("CALLBACKcardhitpath",{derp})
+                        --plaque.CALLBACKcardhitpath(derp)
+                    end
                    return true
                 end
             end
         end
     end
+end
+
+function getPlaqueObject()
+    --e63c4a
+    local plaque = getObjectFromGUID(m_tbDescriptionTags[1])
+    if plaque == nil then
+        printToAll("Could not find plaque")
+        return false
+    end
+    return plaque
 end
 
 function setColorBasedOnCardType(cardType)
