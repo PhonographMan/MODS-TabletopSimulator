@@ -1,9 +1,27 @@
+--Tags Needed
+--Plaque:
+--First tag should be the default deck. This is technically optional
+--      Default: de1e9e
+--Next 18 Tags should be all the Path objects of the main pool:
+--      Default: 3a7ba4 643121 7fd96c 35cf3f 414af8 d2ffb3 42ff95 452a15 4c5d92 ab0899 3e74c7 301212 44549d 135447 5894ba 6ff4eb c884fc 59b770
+--Next 5 Tags should be all the locations for hazzards. This is where they'll go if two are drawn
+--      Default: 832b6f 4ffd93 9bf66e a9440a 8ecbee
+--Next 8 Tags should be the over (tags 25-33)
+--      Default: 91a013 9492b7 b102ac ba9dc6 69d9c9 96c03a 4bb075 1d7a60
+
+
+--Overall Vars
 m_objMainDeck = nil -- The Main Deck
+m_objArtifcatDeck= nil -- The Main Deck
+m_tbPlayerInformation = nil -- Information on the Players in play
+m_tbMoneyBags = nil -- Money Bags
 
 m_btnNumberOfButtons = 0
 m_iBtnDeal = -1 --Deal Button
 m_iBtnShowHideButton = -1 --Deal Button
+m_iBtnOverflowShowHideButton = -1 --Show Hide Overflow
 m_iBtnSmoothMovementButton = -1 --SmoothMovement
+m_iBtnDeckInteractable = -1 --SmoothMovement
 
 m_tbGUIDinDescription = {} -- Tags in Description
 
@@ -12,6 +30,10 @@ m_iHazzardsCards_count = 0
 m_tbHazzardsRemoved = {}
 m_iRoundNumber = 0
 m_iNumberOfHazzardsOutOfDeck = 0
+m_bDeckIsInteractable = false
+m_tmrPreRound = nil --Holds the timer identifier for the merge
+m_iBetweenRoundSetup = -1
+m_iNumberOfArtifactsThisGame = 0
 
 --Round Vars
 m_bRoundIsOn = false
@@ -29,6 +51,12 @@ m_iDealtCards_count = 0
 m_tbDealtCards = {}
 m_iDontFlipNumber_0 = -1
 m_bReadyForNextCard = false
+m_bAreInOverflow = false
+m_iNumberOfCardsInDeck = 0
+m_bWaitingForPlayerResponce = false
+m_iCurrentGems = 0
+m_iCurrentArtifacts = 0
+m_iMaxGemsInFrontOfPlayer = 0
 
 --Deck Recovery
 m_bNeedRecovery = false
@@ -36,21 +64,32 @@ m_bNeedRecovery = false
 --Options
 m_bDeckHidden = false --State of Deck
 m_bSmoothMovement = false--Movecards smoothly
+m_bOverflowShown = false
 
 function onLoad()
     createMainButton()
     createShowHideButton()
     createSmoothMovementButton()
-    --setDeckHidden(false)
+    createOverflowShowHideButton()
+    createInteractableDeckButton()
     
     setSmoothMovement(false)
     
     m_tbGUIDinDescription = getTags(self.getDescription(),"")
     m_iCurrentPath = 2
     
+    m_tbPlayerInformation = createDefaultPlayerTable()
+    updatePlayerCardsInTable()
+    hideAllStayLeaveCards()
+    createMoneyBagsTable()
+    hideAllLocationsForPlayers()
+    
     resetRound()
     setDeckButtonLabel("Setup next game")
     --setupDebugTimer()
+    --setDeckHidden(false)
+    showHideOverflowPaths(false)
+    setDeckInteractable(false)
 end
 
 function onCollisionEnter(info)
@@ -61,20 +100,31 @@ function onCollisionEnter(info)
 end
 
 function mainButton()
+    if m_iBetweenRoundSetup > -1 then
+        return false
+    end
+    
     if m_iRoundNumber == 0 then
+        m_iNumberOfArtifactsThisGame = 0
         m_iRoundNumber = m_iRoundNumber + 1
+        updateInPlayers()
         mergeHazardCardsToMainDeck()
         hazardCardsEmpty()
         retractAllCardsToDeck()
         dealtCardsEmpty()
         resetRound()
-        setDeckButtonLabel("Start new round")
         
-    elseif m_bRoundIsOn then
+        createArtifactTakeOutTimer()
+        setDeckButtonLabel("Taking out Artifacts")
+        m_iBetweenRoundSetup = m_iBetweenRoundSetup + 1
+    elseif m_bRoundIsOn and m_bWaitingForPlayerResponce == false then
         if m_bReadyForNextCard == true then
             if m_bShuffleBeforeDeal then
-                mainDeckShuffle()
+                artifactDeckShuffle()
+                dealArtifactToMainDeck()
                 m_bShuffleBeforeDeal = false
+                createPreRoundTimer()
+                return true
             end
             if dealCardInRound() >= 5 then
                 m_bRoundIsOn = false
@@ -83,6 +133,7 @@ function mainButton()
                     setDeckButtonLabel("Setup next game")
                     m_iRoundNumber = 0
                 else
+                    m_bAreInOverflow = false
                     setDeckButtonLabel("Start new round")
                 end
             else
@@ -91,6 +142,8 @@ function mainButton()
         else
             printToAll("Wooah there buddy. Slow that click down a little.")
         end
+    elseif m_bWaitingForPlayerResponce then
+        printToAll("Things might get dangerous...")
     else
         if retractAllCardsToDeck() then
             if m_bRoundOverDueToHazzards then
@@ -117,7 +170,7 @@ function dealCardInRound()
     -- -1: Could not run for some reason... couldn't find deck etc
     -- 0: Dealt a card round still exists
     -- 5: Two hazzards on table round is automatically over
-    if m_iCurrentPath > 19 then --Ran out of paths
+    if m_iCurrentPath > 33 then --Ran out of paths
         return -1
     elseif m_bRoundOverDueToHazzards == true then
         return 1
@@ -126,24 +179,50 @@ function dealCardInRound()
     if deck == false then
         return -1
     end
+    
+    if m_iNumberOfCardsInDeck == -9001 then
+        local deck = getDeckObject()
+        if deck == nil then
+            printToAll("mainButton: Could not find deck")
+        end
+        m_iNumberOfCardsInDeck = deck.getQuantity()
+    end
+    
+    if m_iNumberOfCardsInDeck <= 0 then
+        printToAll("Ran out of cards")
+        return 7
+    end
+    
     local nextPath = getObjectFromGUID(m_tbGUIDinDescription[m_iCurrentPath])
     if nextPath == nil then
         printToAll("Could not find next path. Ensure all paths are in Plaque description.")
         return -1
     end
     
-    local card = deck.takeObject() 
+    local card = getCurrentNextCard(deck)
+    if card == false then
+        printToAll("dealCardInRound: Could not find card")
+        return -1
+    end
     dealtCardsStore(card) --Stores the card in the array
     local vec = nextPath.getPosition()
-    vec[2] = vec[2] + 0.5
-    flipCardFaceUp(card, true)
-    if m_bSmoothMovement then
-        card.setPositionSmooth(vec,  false,  true)
-    else
-        card.setPosition(vec)
-    end
-    m_bReadyForNextCard = false
     
+    
+    if m_iNumberOfCardsInDeck > 1 then
+        local vec = nextPath.getPosition()
+        vec[2] = vec[2] + 0.5
+        flipCardFaceUp(card, true)
+        m_bReadyForNextCard = false
+        if m_bSmoothMovement then
+            card.setPositionSmooth(vec,  false,  false)
+        else
+            card.setPosition(vec)
+        end
+    else
+        flipCardFaceUp(card)
+    end
+    
+    m_iNumberOfCardsInDeck = m_iNumberOfCardsInDeck - 1
     local cardType = roundCardTypeCheck(card.getDescription())
     if cardType ~= false and cardType ~= "" then
         if cardType == "hazard" then
@@ -156,15 +235,43 @@ function dealCardInRound()
                 m_bRoundOverDueToHazzards = true
                 return 5
             end
+        elseif cardType == "gem" then
+            local gemValue = getGemAmountFromDesc(card.getDescription())
+            
+            printToAll("Gem Card value: " .. gemValue)
+            printToAll("Per Person: "..getGemAmountPerPerson(gemValue))
+            printToAll("On Card: "..getAmountOfGemsOnCard(gemValue))
+            giveGemsToSeatedPlayers(getGemAmountPerPerson(gemValue))
         end
     end
     m_iCurrentPath = m_iCurrentPath + 1
-    if m_iCurrentPath > 19 then
+    if m_iCurrentPath == 20 then --Main paths ran out
+        m_bAreInOverflow = true
+        m_iCurrentPath = 25
+        showHideOverflowPaths(true)
+        printToAll("Ran out of paths... welcome to the overflow!")
+        return 0
+    elseif m_iCurrentPath > 33 then
         printToAll("Got to the end of the temple")
-        return 5
+        return 6
     end
     
+    
+    
     return 0
+end
+
+function getCurrentNextCard(deck)
+    if deck == nil then
+        return false
+    end
+    local card = deck.takeObject()
+    if card == nil and m_bAreInOverflow then
+        return deck
+    elseif card == nil then
+        return false
+    end
+    return card
 end
 
 function resetRound()
@@ -172,6 +279,9 @@ function resetRound()
     if deck == false then
         return false
     end
+    m_bAreInOverflow = false
+    showHideOverflowPaths(false)
+    
     flipCardFaceDown(deck)
     deck.randomize()
     
@@ -188,6 +298,11 @@ function resetRound()
     m_iDontFlipNumber_0 = -1
     resetAllPathColors()
     m_bReadyForNextCard = true
+    m_iNumberOfCardsInDeck = -9001
+    m_bShuffleBeforeDeal = true
+    m_iCurrentGems = 0
+    m_iCurrentArtifacts = 0
+    m_iMaxGemsInFrontOfPlayer = 0
     return true
 end
 
@@ -204,19 +319,35 @@ function resetAllPathColors(newColor)
                 return false
             end
             path.setColorTint( stringColorToRGB(newColor) )
-            if i == 19 then
-                return true
+        elseif i >= 25 then
+            local path = getObjectFromGUID(m_tbGUIDinDescription[i])
+            if path == nil then
+                printToAll("Could not find path: " .. i)
+                return false
             end
-        else
-            return true
+            path.setColorTint( stringColorToRGB(newColor) )
+            --if i == 19 then
+            --    return true
+            --end
+        --else
+        --    return true
         end
     end
-    return false
+    return true
 end
 
 function mainDeckShuffle()
     local deck = getDeckObject()
     if deck == false then
+        return false
+    end
+    deck.randomize()
+end
+
+function artifactDeckShuffle()
+    local deck = getArtifcatDeckObject()
+    if deck == false then
+        printToAll("artifactDeckShuffle: Could not find Artifact Deck")
         return false
     end
     deck.randomize()
@@ -335,6 +466,9 @@ function toggleDeckVisibility()
 end
 
 function flipCardFaceUp(_card, _isMainDeckCard)
+    if _card == nil then
+        return false
+    end
     --Seems the wrong way around.
     --It's this way for the main deck.
     if _isMainDeckCard then
@@ -347,6 +481,9 @@ function flipCardFaceUp(_card, _isMainDeckCard)
 end
 
 function flipCardFaceDown(_card, _isMainDeckCard)
+    if _card == nil then
+        return false
+    end
     if _isMainDeckCard then
         return flipCardFaceUp(_card)
     end
@@ -389,12 +526,17 @@ end
 --
 
 function retractAllCardsToDeck()
-    local deck = getDeckObject()
-    if deck == false then
-        return false
-    end
-    local vec = deck.getPosition()
-    vec[2] = vec[2] + 1
+    local vec = getPositionOfDeck()
+    --if m_bDeckIsActuallyASingleCard == false then
+    --    local deck = getDeckObject()
+    --    if deck == false then
+    --        return false
+    --    end
+    --    vec = deck.getPosition()
+    --    vec[2] = vec[2] + 1
+    --else
+    --    local vec = getPositionOfDeck()
+    --end
     for i, v in ipairs(m_tbDealtCards) do
         if v ~= nil and m_iDontFlipNumber_0 ~= i then
             v.setLock(false)
@@ -410,12 +552,18 @@ function retractAllCardsToDeck()
 end
 
 function mergeHazardCardsToMainDeck()
-    local deck = getDeckObject()
-    if deck == false then
-        return false
-    end
-    local vec = deck.getPosition()
-    vec[2] = vec[2] + 1
+    local vec = getPositionOfDeck()
+    --if m_bDeckIsActuallyASingleCard == false then
+    --    local deck = getDeckObject()
+    --    if deck == false then
+    --        return false
+    --    end
+    --    vec = deck.getPosition()
+    --    vec[2] = vec[2] + 1
+    --else
+    --    local vec = getPositionOfDeck()
+    --end
+
     for i, v in ipairs(m_tbHazzardsRemoved) do
         if v ~= nil then
             v.setLock(false)
@@ -458,6 +606,33 @@ function moveDoubleHazzardsToBottom(hazzardType)
     m_iNumberOfHazzardsOutOfDeck = m_iNumberOfHazzardsOutOfDeck + 1
 end
 
+function dealArtifactToMainDeck()
+    local deck = getDeckObject()
+    if deck == false then
+        return false
+    end
+    local artDeck = getArtifcatDeckObject()
+    if artDeck == false then
+        return false
+    end
+    local card
+    if artDeck.getQuantity() > 0 then
+        card = artDeck.takeObject()
+    else
+        card = artDeck
+    end
+    if card == nil then
+        return false
+    end
+    local vec = getPositionOfDeck()
+    vec[2] = vec[2] + 0.5
+    if m_bSmoothMovement then
+        card.setPositionSmooth(vec,  false,  true)
+    else
+        card.setPosition(vec)
+    end
+end
+
 function toggleSmoothMovement()
     if m_bSmoothMovement then
         setSmoothMovement(false)
@@ -474,7 +649,8 @@ function setDeckHidden(newValue)
     
     if newValue then --Hide Deck
         m_bDeckHidden = true
-        deck.setInvisibleTo(getSeatedPlayers())
+        --deck.setInvisibleTo(getSeatedPlayers())
+        deck.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey"})
         setShowHideButtonLabel("Hide Deck")
     else --Show Deck
         m_bDeckHidden = false
@@ -520,14 +696,34 @@ function setShowHideButtonLabel(newValue)
     end
 end
 
+function setOverflowButtonLabel(newValue)
+    if m_iBtnOverflowShowHideButton ~= -1 then
+        local button_parameters = {}
+        button_parameters.index = m_iBtnOverflowShowHideButton
+        button_parameters.label = newValue
+        self.editButton(button_parameters)
+    end
+end
+
+function setDeckInteractableLabel(newValue)
+    if m_iBtnDeckInteractable ~= -1 then
+        local button_parameters = {}
+        button_parameters.index = m_iBtnDeckInteractable
+        button_parameters.label = newValue
+        self.editButton(button_parameters)
+    end
+end
+
 function getDeckObject()
     if m_objMainDeck ~= nil then
         m_bNeedRecovery = false
+        m_objMainDeck.interactable = m_bDeckIsInteractable
         return m_objMainDeck
     else
         local deck = getObjectFromGUID(m_tbGUIDinDescription[1])
         if deck == nil then
             if findDeckUsingCollider() then
+                m_objMainDeck.interactable = m_bDeckIsInteractable
                 return m_objMainDeck
             end
             printToAll("Could not find deck. If this keeps happenning drop the deck on the Plaque so I can find it.")
@@ -535,10 +731,12 @@ function getDeckObject()
             return false
         end
         if findDeckUsingCollider() then
+            m_objMainDeck.interactable = m_bDeckIsInteractable
             return m_objMainDeck
         end
         m_objMainDeck = deck
         m_bNeedRecovery = false
+        m_objMainDeck.interactable = m_bDeckIsInteractable
         return m_objMainDeck
     end
 end
@@ -547,14 +745,30 @@ function deckRecovery(obj)
     if obj == nil then
         return false
     end
+    local cardTags 
+    if m_bAreInOverflow and obj.getQuantity() == -1 then
+        cardTags = getTags(obj.getDescription(),"#")
+        if cardTags ~= false then
+            if deckRecovery_ifDeckSetDeck(obj,cardTags) then
+                return true
+            end
+        end
+    end
     if obj.getQuantity() == -1 then --Not a deck
         return false
     end
     local objectsInObj = obj.getObjects()
-    local cardTags 
     for i, v in ipairs(objectsInObj) do
         cardTags = getTags(v.description,"#")
-        for j, w in ipairs(cardTags) do
+        if deckRecovery_ifDeckSetDeck(obj,cardTags) then
+            return true
+        end
+    end
+    return false
+end
+
+function deckRecovery_ifDeckSetDeck(obj,cardTags)
+    for j, w in ipairs(cardTags) do
             if getCardTypeFromSingleTag(w) ~= false then
                 --Basically there is a playing card which we think
                 --is part of the main deck in this deck
@@ -564,8 +778,86 @@ function deckRecovery(obj)
                 return true
             end
         end
+    return false
+end
+
+
+function takeOutArtifactsInToNewDeck()
+    local deck = getDeckObject()
+    if deck == nil then
+        return false
+    end
+    local cardTags
+    if deck.getQuantity() == -1 then --Not a deck
+        return false
+    end
+    local objectsInObj = deck.getObjects()
+    for i, v in ipairs(objectsInObj) do
+        cardTags = getTags(v.description,"#")
+        for j, w in ipairs(cardTags) do
+            if getCardTypeFromSingleTag(w) == "artifact" then
+                --There is an artifact
+                printToAll(j)
+                --local artifactCard = getObjectFromGUID(v.guid)
+                local mytable = {}
+                mytable.guid = v.guid
+                local artifactCard = deck.takeObject(mytable)
+                if artifactCard ~= nil then
+                    artifactCard.setPosition(getPositionOfArtifcatDeck())
+                end
+            end
+        end
     end
     return false
+end
+
+function showHideOverflowPaths(showIfTrue)
+    --m_tbGUIDinDescription
+    for i, v in ipairs(m_tbGUIDinDescription) do
+        if i >= 25 then
+            local overflowPath = getObjectFromGUID(m_tbGUIDinDescription[i])
+            if overflowPath ~= nil then
+                if showIfTrue then
+                    overflowPath.setInvisibleTo()
+                else
+                    overflowPath.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey"})
+                end
+            end
+        end
+    end
+    if showIfTrue then
+        setOverflowButtonLabel("Show Overflow")
+    else
+        setOverflowButtonLabel("Hide Overflow")
+    end
+    m_bOverflowShown = showIfTrue
+end
+
+function toggleOverflowPaths()
+    if m_bOverflowShown then
+        showHideOverflowPaths(false)
+    else
+        showHideOverflowPaths(true)
+    end
+end
+
+function setDeckInteractable(newValue)
+    m_bDeckIsInteractable = newValue
+    if m_bDeckIsInteractable then
+        setDeckInteractableLabel("Deck Interactable")
+    else
+        setDeckInteractableLabel("Deck Not-interactable")
+    end
+    local deck = getDeckObject()
+    local artifcat = getArtifcatDeckObject()
+end
+
+function toggleDeckInteractable()
+    if m_bDeckIsInteractable then
+        setDeckInteractable(false)
+    else
+        setDeckInteractable(true)
+    end
 end
 
 function getNextFreeHazzardPlacementObject()
@@ -616,6 +908,9 @@ function getTags(description, requiredElement)
     --      The values found
     if description == "" then
         return false
+    end
+    if requiredElement == nil then
+        requiredElement = ""
     end
     _stringSplit = string.gmatch(description, "%S+")
     _returnArray = {}
@@ -692,6 +987,40 @@ function createSmoothMovementButton()
     m_btnNumberOfButtons = m_btnNumberOfButtons + 1
 end
 
+function createOverflowShowHideButton()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "toggleOverflowPaths"
+    button_parameters.function_owner = self
+    button_parameters.position = {-11,0,-21}
+    button_parameters.label = "Show/Hide"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnOverflowShowHideButton = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function createInteractableDeckButton()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "toggleDeckInteractable"
+    button_parameters.function_owner = self
+    button_parameters.position = {-11,0,-24}
+    button_parameters.label = "Interactable"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnDeckInteractable = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
 function setupDebugTimer()
     timerID = self.getGUID()..math.random(9999999999999)
     --Start timer which repeats forever, running countItems() every second
@@ -716,13 +1045,454 @@ function findItemsWhereMainDeckShouldBe()
     --Find scaling factor
     local scale = self.getScale()
     --Set position for the sphere
-    local pos = self.getPosition()
-    pos.z = pos.z + 22.5
-    pos.x = pos.x + 5.5
-    pos.y=pos.y+(1.25*scale.y)
+    local pos = getPositionOfDeck()
     --Ray trace to get all objects
     return Physics.cast({
         origin=pos, direction={0,1,0}, type=2, max_distance=0,
         size={5*scale.x,7.4*scale.y,5.4*scale.z}, debug=true
     })
+end
+
+function findArtifcatDeckUsingCollider()
+    local objects = findItemsWhereArtifcatDeckShouldBe()
+    for _, entry in ipairs(objects) do
+        if artifcatDeckRecovery(entry.hit_object) then
+            return true
+        end
+    end
+    return false
+end
+
+function findItemsWhereArtifcatDeckShouldBe()
+    --Find scaling factor
+    local scale = self.getScale()
+    --Set position for the sphere
+    local pos = getPositionOfArtifcatDeck()
+    --Ray trace to get all objects
+    return Physics.cast({
+        origin=pos, direction={0,1,0}, type=2, max_distance=0,
+        size={5*scale.x,7.4*scale.y,5.4*scale.z}, debug=true
+    })
+end
+
+function artifcatDeckRecovery(obj)
+    if obj == nil then
+        return false
+    end
+    local cardTags 
+    if obj.getQuantity() == -1 then
+        cardTags = getTags(obj.getDescription(),"#")
+        if cardTags ~= false then
+            if artifcatDeckRecovery_ifDeckSetDeck(obj,cardTags) then
+                return true
+            end
+        end
+        return false
+    end
+    local objectsInObj = obj.getObjects()
+    for i, v in ipairs(objectsInObj) do
+        cardTags = getTags(v.description,"#")
+        if cardTags ~= false then
+            if artifcatDeckRecovery_ifDeckSetDeck(obj,cardTags) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function artifcatDeckRecovery_ifDeckSetDeck(obj,cardTags)
+    for j, w in ipairs(cardTags) do
+        printToAll(j .. ": " .. w)
+        if getCardTypeFromSingleTag(w) ~= false then
+            --Basically there is a playing card which we think
+            --is part of the main deck in this deck
+            m_objArtifcatDeck = obj
+            printToAll("Found the artifcat deck!")
+            return true
+        end
+    end
+    return false
+end
+
+function getArtifcatDeckObject()
+    if m_objArtifcatDeck ~= nil then
+        m_bNeedRecovery = false
+        m_objArtifcatDeck.interactable = m_bDeckIsInteractable
+        return m_objArtifcatDeck
+    else
+        if findArtifcatDeckUsingCollider() then
+            m_objArtifcatDeck.interactable = m_bDeckIsInteractable
+            return m_objArtifcatDeck
+        end
+    end
+    return false
+end
+
+function getPositionOfDeck()
+    local scale = self.getScale()
+    local pos = self.getPosition()
+    pos.z = pos.z + 22.5
+    pos.x = pos.x + 5.5
+    pos.y=pos.y+(1.25*scale.y)
+    return pos
+end
+
+function getPositionOfArtifcatDeck()
+    local scale = self.getScale()
+    local pos = getPositionOfDeck()
+    pos.x = pos.x + 6
+    return pos
+end
+
+function createPreRoundTimer()
+    m_tmrPreRound = self.getGUID()..math.random(9999999999999)
+    
+    Timer.create({
+        identifier=m_tmrPreRound,
+        function_name="shuffleAndPressMainButton", function_owner=self,
+        repetitions=0, delay=2
+    })
+    setDeckButtonLabel("Waiting for card")
+end
+
+function shuffleAndPressMainButton()
+    Timer.destroy(m_tmrPreRound)
+    m_tmrPreRound = nil
+    --Ensures the interaction is updated if this is a new deck now
+    local deck = getArtifcatDeckObject()
+    mainDeckShuffle()
+    mainButton()
+end
+
+function createArtifactTakeOutTimer()
+    m_tmrPreRound = self.getGUID()..math.random(9999999999999)
+    
+    Timer.create({
+        identifier=m_tmrPreRound,
+        function_name="timerCallbackArtifact", function_owner=self,
+        repetitions=0, delay=2
+    })
+    setDeckButtonLabel("Waiting for card")
+end
+
+function timerCallbackArtifact()
+    Timer.destroy(m_tmrPreRound)
+    m_tmrPreRound = nil
+    takeOutArtifactsInToNewDeck()
+    m_iBetweenRoundSetup = m_iBetweenRoundSetup + 1
+    createArtifactShuffleTimer()
+end
+
+function createArtifactShuffleTimer()
+    m_tmrPreRound = self.getGUID()..math.random(9999999999999)
+    
+    Timer.create({
+        identifier=m_tmrPreRound,
+        function_name="timerCallbackShuffleArtifact", function_owner=self,
+        repetitions=0, delay=2
+    })
+    setDeckButtonLabel("Waiting for deck")
+end
+
+function timerCallbackShuffleArtifact()
+    Timer.destroy(m_tmrPreRound)
+    m_tmrPreRound = nil
+    artifactDeckShuffle()
+    m_iBetweenRoundSetup = -1
+    setDeckButtonLabel("Start next round")
+end
+
+function createDefaultPlayerTable()
+    local playerTable = {}
+    playerTable.Green = createDefaultSinglePlayerTable()
+    playerTable.Blue = createDefaultSinglePlayerTable()
+    playerTable.Purple = createDefaultSinglePlayerTable()
+    playerTable.Pink = createDefaultSinglePlayerTable()
+    playerTable.White = createDefaultSinglePlayerTable()
+    playerTable.Red = createDefaultSinglePlayerTable()
+    playerTable.Orange = createDefaultSinglePlayerTable()
+    playerTable.Yellow = createDefaultSinglePlayerTable()
+    return playerTable
+end
+
+function createDefaultSinglePlayerTable()
+    local singlePlayer = {}
+    singlePlayer.areInRound = false
+    singlePlayer.areInGame = false
+    singlePlayer.areInRoom = false
+    singlePlayer.objCardStay = nil
+    singlePlayer.objCardLeave = nil
+    singlePlayer.objOutsideTenCounter = nil
+    return singlePlayer
+end
+
+function updatePlayerCardsInTable()
+    if m_tbPlayerInformation == nil then
+        printToAll("updatePlayerCardsInTable: PlayerInformation is blank")
+    end
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    local path
+    for i, v in ipairs(colorsInOrder) do
+        path = getObjectFromGUID(m_tbGUIDinDescription[1 + i])
+        if path ~= nil then
+            if findPlayerCardsInTable(m_tbPlayerInformation[v],path.getDescription()) == false then
+                printToAll("updatePlayerCardsInTable: Couldn't find "..v.." Cards")
+            end
+        end
+    end
+    return true
+end
+
+function findPlayerCardsInTable(destTable,guidsFromPath)
+    local pathTags = getTags(guidsFromPath,"")
+    if pathTags == false then
+        return false
+    end
+    destTable.objCardStay = getObjectFromGUID(pathTags[2])
+    if destTable.objCardStay == nil then
+        return false
+    end
+    destTable.objCardLeave = getObjectFromGUID(pathTags[3])
+    if destTable.objCardLeave == nil then
+        return false
+    end
+    destTable.objOutsideTenCounter = getObjectFromGUID(pathTags[4])
+    if destTable.objOutsideTenCounter == nil then
+        return false
+    end
+end
+
+function hideAllStayLeaveCards()
+    if hideAllStayLeaveCards == nil then
+        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+    end
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        if m_tbPlayerInformation[v].objCardStay ~= nil then
+            m_tbPlayerInformation[v].objCardStay.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey"})
+            m_tbPlayerInformation[v].objCardStay.interactable = false
+        end
+        if m_tbPlayerInformation[v].objCardLeave ~= nil then
+            m_tbPlayerInformation[v].objCardLeave.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey"})
+            m_tbPlayerInformation[v].objCardStay.interactable = false
+        end
+    end
+end
+
+function showStayLeaveCardsForInPlayers()
+    if hideAllStayLeaveCards == nil then
+        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+    end
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        if m_tbPlayerInformation[v].areInRound then
+            if m_tbPlayerInformation[v].objCardStay ~= nil then
+                m_tbPlayerInformation[v].objCardStay.setInvisibleTo()
+                m_tbPlayerInformation[v].objCardStay.interactable = true
+                flipCardFaceUp(m_tbPlayerInformation[v].objCardStay)
+            end
+            if m_tbPlayerInformation[v].objCardLeave ~= nil then
+                m_tbPlayerInformation[v].objCardLeave.setInvisibleTo()
+                m_tbPlayerInformation[v].objCardStay.interactable = true
+                flipCardFaceDown(m_tbPlayerInformation[v].objCardLeave)
+            end
+        end
+    end
+end
+
+function hideAllLocationsForPlayers()
+    if hideAllStayLeaveCards == nil then
+        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+    end
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        if m_tbPlayerInformation[v].objCardStay ~= nil then
+            m_tbPlayerInformation[v].objOutsideTenCounter.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey"})
+            m_tbPlayerInformation[v].objOutsideTenCounter.interactable = false
+        end
+    end
+end
+
+function updateInPlayers()
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        m_tbPlayerInformation[v].areInRound = false
+    end
+    local seatedPlayers = getSeatedPlayers()
+    for i, v in ipairs(seatedPlayers) do
+        m_tbPlayerInformation[v].areInRound = true
+    end
+end
+
+function getNumberOfPlayersInRound()
+    local playersInRound = 0
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        if m_tbPlayerInformation[v].areInRound then
+            playersInRound = playersInRound + 1
+        end
+    end
+    return playersInRound;
+end
+
+function getGemAmountFromDesc(cardDesc)
+    local cardTags = getTags(cardDesc,"#")
+    if cardTags == false then
+        return 0
+    end
+    local numberTag
+    for i, v in ipairs(cardTags) do
+        if v ~= nil and string.len(v) > 1 then
+            local stringBarFirst = string.sub(v,2,-1)
+            --So this didn't work and I've no idea why.
+            --printToAll("stringBarFirst: "..stringBarFirst)
+            --numberTag = toNumber(stringBarFirst,10)
+            --if numberTag ~= nil then
+            --    return numberTag
+            --end
+            if stringBarFirst == "1" then
+                return 1
+            elseif stringBarFirst == "2" then
+                return 2
+            elseif stringBarFirst == "3" then
+                return 3
+            elseif stringBarFirst == "4" then
+                return 4
+            elseif stringBarFirst == "5" then
+                return 5
+            elseif stringBarFirst == "7" then
+                return 7
+            elseif stringBarFirst == "9" then
+                return 9
+            elseif stringBarFirst == "11" then
+                return 11
+            elseif stringBarFirst == "13" then
+                return 13
+            elseif stringBarFirst == "14" then
+                return 14
+            elseif stringBarFirst == "15" then
+                return 15
+            elseif stringBarFirst == "17" then
+                return 17
+            end
+        end
+    end
+    return 0
+end
+
+function getGemAmountPerPerson(gemAmount)
+    local playersIn = getNumberOfPlayersInRound()
+    local timesIn = math.floor(gemAmount / playersIn,0)
+    return timesIn
+end
+
+function getAmountOfGemsOnCard(gemAmount)
+    local playersIn = getNumberOfPlayersInRound()
+    if math.fmod(gemAmount,playersIn) == 0 then
+        return 0
+    else
+        local timesIn = math.floor(gemAmount / playersIn,0)
+        return gemAmount - (timesIn * playersIn);
+    end
+end
+
+--THIS FUNCTION BREAKS EVERYTHING
+function giveGemsToSeatedPlayers(gemAmount)
+    if m_tbMoneyBags.gems == nil then
+        printToAll("giveGemsToSeatedPlayers: No gem bag?")
+        return false
+    elseif m_tbMoneyBags.gems.getQuantity() <= -1 then
+        printToAll("giveGemsToSeatedPlayers: Gem Bag not a bag")
+        return false
+    end
+    if m_tbMoneyBags.gold == nil then
+        printToAll("giveGemsToSeatedPlayers: No gold bag?")
+        return false
+    elseif m_tbMoneyBags.gold.getQuantity() <= -1 then
+        printToAll("giveGemsToSeatedPlayers: Gold Bag not a bag")
+        return false
+    end
+    if m_tbMoneyBags.obsidian == nil then
+        printToAll("giveGemsToSeatedPlayers: No obsidian bag?")
+        return false
+    elseif m_tbMoneyBags.obsidian.getQuantity() <= -1 then
+        printToAll("giveGemsToSeatedPlayers: Obsidian Bag not a bag")
+        return false
+    end
+    local totalSoFar = 0
+    local obsidianNumber = math.floor(gemAmount / 10,0)
+    totalSoFar = obsidianNumber * 10
+    local goldNumber = math.floor((gemAmount - totalSoFar) / 5,0)
+    totalSoFar = totalSoFar + (goldNumber * 5)
+    local gemNumber = gemAmount - totalSoFar
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        if m_tbPlayerInformation[v].areInRound then
+            local vec
+            local counterObj = m_tbPlayerInformation[v].objOutsideTenCounter
+            vec = counterObj.getPosition()
+            vec[2] = vec[2] + 0.5
+            takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gems,vec,gemNumber)
+            takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gold,vec,goldNumber)
+            takeObjectsAndMoveThemSlowly(m_tbMoneyBags.obsidian,vec,obsidianNumber)
+        end
+    end
+    return true
+end
+
+function takeObjectsAndMoveThemSlowly(bag,dest,qty)
+    local objReuse
+    for j = qty,1,-1 do
+        objReuse = bag.takeObject()
+        objReuse.setPositionSmooth(dest,false,false)
+    end
+end
+
+function createMoneyBagsTable()
+    local path = getObjectFromGUID(m_tbGUIDinDescription[10])
+    if path == nil then
+        printToAll("createMoneyBagsTable: No 9th path")
+        return false
+    end
+    local pathTags = getTags(path.getDescription())
+    if pathTags == false then
+        printToAll("createMoneyBagsTable: No path description" .. path.getDescription())
+        return false
+    end
+    m_tbMoneyBags = {}
+    m_tbMoneyBags.gems = getObjectFromGUID(pathTags[2])
+    if m_tbMoneyBags.gems == nil or m_tbMoneyBags.gems == false then
+        printToAll("createMoneyBagsTable: Could not find Gems bag")
+    end
+    m_tbMoneyBags.gold = getObjectFromGUID(pathTags[3])
+    if m_tbMoneyBags.gold == nil or m_tbMoneyBags.gold == false then
+        printToAll("createMoneyBagsTable: Could not find Gold bag")
+    end
+    m_tbMoneyBags.obsidian = getObjectFromGUID(pathTags[4])
+    if m_tbMoneyBags.obsidian == nil or m_tbMoneyBags.obsidian == false then
+        printToAll("createMoneyBagsTable: Could not find Obsidian bag")
+    end
+    m_tbMoneyBags.artifact_1 = getObjectFromGUID(pathTags[5])
+    if m_tbMoneyBags.artifact_1 == nil or m_tbMoneyBags.artifact_1 == false then
+        printToAll("createMoneyBagsTable: Could not find artifact_0")
+    end
+    m_tbMoneyBags.artifact_2 = getObjectFromGUID(pathTags[6])
+    if m_tbMoneyBags.artifact_2 == nil or m_tbMoneyBags.artifact_2 == false then
+        printToAll("createMoneyBagsTable: Could not find artifact_1")
+    end
+    m_tbMoneyBags.artifact_3 = getObjectFromGUID(pathTags[7])
+    if m_tbMoneyBags.artifact_3 == nil or m_tbMoneyBags.artifact_3 == false then
+        printToAll("createMoneyBagsTable: Could not find artifact_2")
+    end
+    m_tbMoneyBags.artifact_4 = getObjectFromGUID(pathTags[8])
+    if m_tbMoneyBags.artifact_4 == nil or m_tbMoneyBags.artifact_4 == false then
+        printToAll("createMoneyBagsTable: Could not find artifact_4")
+    end
+    m_tbMoneyBags.artifact_5 = getObjectFromGUID(pathTags[9])
+    if m_tbMoneyBags.artifact_5 == nil or m_tbMoneyBags.artifact_5 == false then
+        printToAll("createMoneyBagsTable: Could not find artifact_5")
+    end
+    printToAll("createMoneyBagsTable: Found money bags")
+    return m_tbMoneyBags
 end
