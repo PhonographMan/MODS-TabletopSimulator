@@ -93,6 +93,22 @@ function onLoad()
     --setDeckHidden(false)
     showHideOverflowPaths(false)
     setDeckInteractable(false)
+    
+    --local obj = getObjectFromGUID("f98dae")
+    --obj.setValue("Red")
+    --obj.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Grey"})
+    
+    local obj
+    for _,obj in ipairs(getAllObjects()) do
+        if obj.tag == 'Fog' then
+            printToAll(obj.getValue())
+            --if obj.getValue() == "Red" then
+            --    obj.setValue("White")
+            --end
+            obj.interactable = false
+            -- obj is a hidden zone, do stuff with it
+        end
+    end
 end
 
 function onCollisionEnter(info)
