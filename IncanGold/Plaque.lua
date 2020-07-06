@@ -22,6 +22,7 @@ m_iBtnShowHideButton = -1 --Deal Button
 m_iBtnOverflowShowHideButton = -1 --Show Hide Overflow
 m_iBtnSmoothMovementButton = -1 --SmoothMovement
 m_iBtnDeckInteractable = -1 --SmoothMovement
+m_iBtnUtilityInteractable = -1 --SmoothMovement
 
 m_tbGUIDinDescription = {} -- Tags in Description
 
@@ -65,6 +66,7 @@ m_bNeedRecovery = false
 m_bDeckHidden = false --State of Deck
 m_bSmoothMovement = false--Movecards smoothly
 m_bOverflowShown = false
+m_bUtilityLocationsOn = false
 
 function onLoad()
     createMainButton()
@@ -72,6 +74,7 @@ function onLoad()
     createSmoothMovementButton()
     createOverflowShowHideButton()
     createInteractableDeckButton()
+    createUtilityLocationsToggleButton()
     
     setSmoothMovement(false)
     
@@ -81,8 +84,8 @@ function onLoad()
     m_tbPlayerInformation = createDefaultPlayerTable()
     updatePlayerCardsInTable()
     hideAllStayLeaveCards()
-    createMoneyBagsTable()
-    hideAllLocationsForPlayers()
+    m_tbMoneyBags = createMoneyBagsTable()
+    setUtilityLocations(false)
     
     resetRound()
     setDeckButtonLabel("Setup next game")
@@ -714,6 +717,15 @@ function setDeckInteractableLabel(newValue)
     end
 end
 
+function setUtilityButtonLabel(newValue)
+    if m_iBtnDeckInteractable ~= -1 then
+        local button_parameters = {}
+        button_parameters.index = m_iBtnUtilityInteractable
+        button_parameters.label = newValue
+        self.editButton(button_parameters)
+    end
+end
+
 function getDeckObject()
     if m_objMainDeck ~= nil then
         m_bNeedRecovery = false
@@ -859,6 +871,28 @@ function toggleDeckInteractable()
         setDeckInteractable(true)
     end
 end
+
+function setUtilityLocations(newValue)
+    m_bUtilityLocationsOn = newValue
+    if m_bUtilityLocationsOn then
+        setUtilityButtonLabel("Utility On")
+        showAllLocationsForPlayers()
+    else
+        setUtilityButtonLabel("Utility Off")
+        hideAllLocationsForPlayers()
+    end
+    
+end
+
+function toggleUtilityLocations()
+    if m_bUtilityLocationsOn then
+        setUtilityLocations(false)
+    else
+        setUtilityLocations(true)
+    end
+end
+
+--
 
 function getNextFreeHazzardPlacementObject()
     -- Only the Hazzard placement tags are 19 -23 inc
@@ -1018,6 +1052,23 @@ function createInteractableDeckButton()
     self.createButton(button_parameters)
     --Set reference
     m_iBtnDeckInteractable = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function createUtilityLocationsToggleButton()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "toggleUtilityLocations"
+    button_parameters.function_owner = self
+    button_parameters.position = {-16.5,0,-21}
+    button_parameters.label = "Show/Hide"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnUtilityInteractable = m_btnNumberOfButtons
     m_btnNumberOfButtons = m_btnNumberOfButtons + 1
 end
 
@@ -1314,6 +1365,19 @@ function hideAllLocationsForPlayers()
     end
 end
 
+function showAllLocationsForPlayers()
+    if hideAllStayLeaveCards == nil then
+        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+    end
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        if m_tbPlayerInformation[v].objCardStay ~= nil then
+            m_tbPlayerInformation[v].objOutsideTenCounter.setInvisibleTo()
+            m_tbPlayerInformation[v].objOutsideTenCounter.interactable = true
+        end
+    end
+end
+
 function updateInPlayers()
     local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
     for i, v in ipairs(colorsInOrder) do
@@ -1426,27 +1490,110 @@ function giveGemsToSeatedPlayers(gemAmount)
     local goldNumber = math.floor((gemAmount - totalSoFar) / 5,0)
     totalSoFar = totalSoFar + (goldNumber * 5)
     local gemNumber = gemAmount - totalSoFar
-    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
-    for i, v in ipairs(colorsInOrder) do
-        if m_tbPlayerInformation[v].areInRound then
-            local vec
-            local counterObj = m_tbPlayerInformation[v].objOutsideTenCounter
-            vec = counterObj.getPosition()
-            vec[2] = vec[2] + 0.5
-            takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gems,vec,gemNumber)
-            takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gold,vec,goldNumber)
-            takeObjectsAndMoveThemSlowly(m_tbMoneyBags.obsidian,vec,obsidianNumber)
-        end
+    local _colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    local vec
+    local counterObj
+    --Would love to do the below code... it's real nice.
+    --But I keep getting "Tuple" errors.
+    --for i, v in ipairs(_colorsInOrder) do
+    --    if m_tbPlayerInformation[v].areInRound then
+    --        counterObj = m_tbPlayerInformation[v].objOutsideTenCounter
+    --        vec = counterObj.getPosition()
+    --        vec[2] = vec[2] + 0.5
+    --        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gems,vec,gemNumber)
+    --        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gold,vec,goldNumber)
+    --        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.obsidian,vec,obsidianNumber)
+    --    end
+    --end
+    --Instead:
+    if m_tbPlayerInformation[_colorsInOrder[1]].areInRound then
+        counterObj = m_tbPlayerInformation[_colorsInOrder[1]].objOutsideTenCounter
+        vec = counterObj.getPosition()
+        vec[2] = vec[2] + 1
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gems,vec,gemNumber)
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gold,vec,goldNumber)
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.obsidian,vec,obsidianNumber)
+    end
+    if m_tbPlayerInformation[_colorsInOrder[2]].areInRound then
+        counterObj = m_tbPlayerInformation[_colorsInOrder[2]].objOutsideTenCounter
+        vec = counterObj.getPosition()
+        vec[2] = vec[2] + 1
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gems,vec,gemNumber)
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gold,vec,goldNumber)
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.obsidian,vec,obsidianNumber)
+    end
+    if m_tbPlayerInformation[_colorsInOrder[3]].areInRound then
+        counterObj = m_tbPlayerInformation[_colorsInOrder[3]].objOutsideTenCounter
+        vec = counterObj.getPosition()
+        vec[2] = vec[2] + 1
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gems,vec,gemNumber)
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gold,vec,goldNumber)
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.obsidian,vec,obsidianNumber)
+    end
+    if m_tbPlayerInformation[_colorsInOrder[4]].areInRound then
+        counterObj = m_tbPlayerInformation[_colorsInOrder[4]].objOutsideTenCounter
+        vec = counterObj.getPosition()
+        vec[2] = vec[2] + 1
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gems,vec,gemNumber)
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gold,vec,goldNumber)
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.obsidian,vec,obsidianNumber)
+    end
+    if m_tbPlayerInformation[_colorsInOrder[5]].areInRound then
+        counterObj = m_tbPlayerInformation[_colorsInOrder[5]].objOutsideTenCounter
+        vec = counterObj.getPosition()
+        vec[2] = vec[2] + 1
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gems,vec,gemNumber)
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gold,vec,goldNumber)
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.obsidian,vec,obsidianNumber)
+    end
+    if m_tbPlayerInformation[_colorsInOrder[6]].areInRound then
+        counterObj = m_tbPlayerInformation[_colorsInOrder[6]].objOutsideTenCounter
+        vec = counterObj.getPosition()
+        vec[2] = vec[2] + 1
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gems,vec,gemNumber)
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gold,vec,goldNumber)
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.obsidian,vec,obsidianNumber)
+    end
+    if m_tbPlayerInformation[_colorsInOrder[7]].areInRound then
+        counterObj = m_tbPlayerInformation[_colorsInOrder[7]].objOutsideTenCounter
+        vec = counterObj.getPosition()
+        vec[2] = vec[2] + 1
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gems,vec,gemNumber)
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gold,vec,goldNumber)
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.obsidian,vec,obsidianNumber)
+    end
+    if m_tbPlayerInformation[_colorsInOrder[8]].areInRound then
+        counterObj = m_tbPlayerInformation[_colorsInOrder[8]].objOutsideTenCounter
+        vec = counterObj.getPosition()
+        vec[2] = vec[2] + 1
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gems,vec,gemNumber)
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gold,vec,goldNumber)
+        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.obsidian,vec,obsidianNumber)
     end
     return true
 end
 
 function takeObjectsAndMoveThemSlowly(bag,dest,qty)
     local objReuse
+    local vec = Vector(dest[1],dest[2],dest[3])
+    local j = 0
+    --printToAll("Pre: " .. qty)
     for j = qty,1,-1 do
         objReuse = bag.takeObject()
-        objReuse.setPositionSmooth(dest,false,false)
+        vec = getRandomVectorFromLocation(vec,-1,1)
+        objReuse.setPositionSmooth(vec,false,false)
+        --printToAll("Giving: " .. qty)
     end
+end
+
+function getRandomVectorFromLocation(vec,_lower,_upper)
+    _lower = _lower * 100
+    _upper = _upper * 100
+    local outputVec = Vector(vec[1],vec[2],vec[3])
+    math.randomseed(os.time())
+    outputVec[1] = outputVec[1] + (math.random(_lower, _upper) / 100)
+    outputVec[3] = outputVec[3] + (math.random (_lower, _upper) / 100)
+    return outputVec
 end
 
 function createMoneyBagsTable()
@@ -1460,39 +1607,46 @@ function createMoneyBagsTable()
         printToAll("createMoneyBagsTable: No path description" .. path.getDescription())
         return false
     end
-    m_tbMoneyBags = {}
-    m_tbMoneyBags.gems = getObjectFromGUID(pathTags[2])
-    if m_tbMoneyBags.gems == nil or m_tbMoneyBags.gems == false then
+    local moneyBagsTable = {}
+    moneyBagsTable.gems = getObjectFromGUID(pathTags[2])
+    if moneyBagsTable.gems == nil or moneyBagsTable.gems == false then
         printToAll("createMoneyBagsTable: Could not find Gems bag")
     end
-    m_tbMoneyBags.gold = getObjectFromGUID(pathTags[3])
-    if m_tbMoneyBags.gold == nil or m_tbMoneyBags.gold == false then
+    moneyBagsTable.gold = getObjectFromGUID(pathTags[3])
+    if moneyBagsTable.gold == nil or moneyBagsTable.gold == false then
         printToAll("createMoneyBagsTable: Could not find Gold bag")
     end
-    m_tbMoneyBags.obsidian = getObjectFromGUID(pathTags[4])
-    if m_tbMoneyBags.obsidian == nil or m_tbMoneyBags.obsidian == false then
+    moneyBagsTable.obsidian = getObjectFromGUID(pathTags[4])
+    if moneyBagsTable.obsidian == nil or moneyBagsTable.obsidian == false then
         printToAll("createMoneyBagsTable: Could not find Obsidian bag")
     end
-    m_tbMoneyBags.artifact_1 = getObjectFromGUID(pathTags[5])
-    if m_tbMoneyBags.artifact_1 == nil or m_tbMoneyBags.artifact_1 == false then
+    moneyBagsTable.artifact_1 = getObjectFromGUID(pathTags[5])
+    if moneyBagsTable.artifact_1 == nil or moneyBagsTable.artifact_1 == false then
         printToAll("createMoneyBagsTable: Could not find artifact_0")
     end
-    m_tbMoneyBags.artifact_2 = getObjectFromGUID(pathTags[6])
-    if m_tbMoneyBags.artifact_2 == nil or m_tbMoneyBags.artifact_2 == false then
+    moneyBagsTable.artifact_2 = getObjectFromGUID(pathTags[6])
+    if moneyBagsTable.artifact_2 == nil or moneyBagsTable.artifact_2 == false then
         printToAll("createMoneyBagsTable: Could not find artifact_1")
     end
-    m_tbMoneyBags.artifact_3 = getObjectFromGUID(pathTags[7])
-    if m_tbMoneyBags.artifact_3 == nil or m_tbMoneyBags.artifact_3 == false then
+    moneyBagsTable.artifact_3 = getObjectFromGUID(pathTags[7])
+    if moneyBagsTable.artifact_3 == nil or moneyBagsTable.artifact_3 == false then
         printToAll("createMoneyBagsTable: Could not find artifact_2")
     end
-    m_tbMoneyBags.artifact_4 = getObjectFromGUID(pathTags[8])
-    if m_tbMoneyBags.artifact_4 == nil or m_tbMoneyBags.artifact_4 == false then
+    moneyBagsTable.artifact_4 = getObjectFromGUID(pathTags[8])
+    if moneyBagsTable.artifact_4 == nil or moneyBagsTable.artifact_4 == false then
         printToAll("createMoneyBagsTable: Could not find artifact_4")
     end
-    m_tbMoneyBags.artifact_5 = getObjectFromGUID(pathTags[9])
-    if m_tbMoneyBags.artifact_5 == nil or m_tbMoneyBags.artifact_5 == false then
+    moneyBagsTable.artifact_5 = getObjectFromGUID(pathTags[9])
+    if moneyBagsTable.artifact_5 == nil or moneyBagsTable.artifact_5 == false then
         printToAll("createMoneyBagsTable: Could not find artifact_5")
     end
     printToAll("createMoneyBagsTable: Found money bags")
-    return m_tbMoneyBags
+    return moneyBagsTable
+end
+
+function copyVectorToVector(original,copy)
+    copy[1] = original[1]
+    copy[2] = original[2]
+    copy[3] = original[3]
+    return true
 end
