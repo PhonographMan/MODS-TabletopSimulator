@@ -58,6 +58,8 @@ m_bWaitingForPlayerResponce = false
 m_iCurrentGems = 0
 m_iCurrentArtifacts = 0
 m_iMaxGemsInFrontOfPlayer = 0
+m_tbGemsOnCards = {} --Holds objs for the gems
+m_iNumberOfGemsInTable = 0 --How many gems in above
 
 --Deck Recovery
 m_bNeedRecovery = false
@@ -93,9 +95,6 @@ function onLoad()
     --setDeckHidden(false)
     showHideOverflowPaths(false)
     setDeckInteractable(false)
-    
-    --local obj = getObjectFromGUID("f98dae")
-    --obj.setValue("Red")
     --obj.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Grey"})
     
     local obj
@@ -249,6 +248,8 @@ function dealCardInRound()
             m_sRoundOverDueToHazzard = roundHazzardSpecificCheck(card.getDescription(), true)
             local hazzardEnder = roundHazzardUpdate()
             if hazzardEnder ~= "" then
+                storeDestroyAllGems()
+                storeEmptyGems()
                 markDoubleHazzards(m_sRoundOverDueToHazzard)
                 printToAll("Two " .. hazzardEnder .. " cards")
                 m_bRoundOverDueToHazzards = true
@@ -261,6 +262,7 @@ function dealCardInRound()
             printToAll("Per Person: "..getGemAmountPerPerson(gemValue))
             printToAll("On Card: "..getAmountOfGemsOnCard(gemValue))
             giveGemsToSeatedPlayers(getGemAmountPerPerson(gemValue))
+            giveGemsToCards(getAmountOfGemsOnCard(gemValue),card)
         end
     end
     m_iCurrentPath = m_iCurrentPath + 1
@@ -271,6 +273,8 @@ function dealCardInRound()
         printToAll("Ran out of paths... welcome to the overflow!")
         return 0
     elseif m_iCurrentPath > 33 then
+        storeDestroyAllGems()
+        storeEmptyGems()
         printToAll("Got to the end of the temple")
         return 6
     end
@@ -1410,7 +1414,7 @@ function getNumberOfPlayersInRound()
     local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
     for i, v in ipairs(colorsInOrder) do
         if m_tbPlayerInformation[v].areInRound then
-            playersInRound = playersInRound + 1
+            playersInRound = playersInRound + 2
         end
     end
     return playersInRound;
@@ -1477,7 +1481,6 @@ function getAmountOfGemsOnCard(gemAmount)
     end
 end
 
---THIS FUNCTION BREAKS EVERYTHING
 function giveGemsToSeatedPlayers(gemAmount)
     if m_tbMoneyBags.gems == nil then
         printToAll("giveGemsToSeatedPlayers: No gem bag?")
@@ -1589,7 +1592,44 @@ function giveGemsToSeatedPlayers(gemAmount)
     return true
 end
 
-function takeObjectsAndMoveThemSlowly(bag,dest,qty)
+function giveGemsToCards(gemAmount, card)
+    if gemAmount <= 0 then
+        return false
+    end
+    if m_tbMoneyBags.gems == nil then
+        printToAll("giveGemsToSeatedPlayers: No gem bag?")
+        return false
+    elseif m_tbMoneyBags.gems.getQuantity() <= -1 then
+        printToAll("giveGemsToSeatedPlayers: Gem Bag not a bag")
+        return false
+    end
+    if m_tbMoneyBags.gold == nil then
+        printToAll("giveGemsToSeatedPlayers: No gold bag?")
+        return false
+    elseif m_tbMoneyBags.gold.getQuantity() <= -1 then
+        printToAll("giveGemsToSeatedPlayers: Gold Bag not a bag")
+        return false
+    end
+    if m_tbMoneyBags.obsidian == nil then
+        printToAll("giveGemsToSeatedPlayers: No obsidian bag?")
+        return false
+    elseif m_tbMoneyBags.obsidian.getQuantity() <= -1 then
+        printToAll("giveGemsToSeatedPlayers: Obsidian Bag not a bag")
+        return false
+    end
+    local vec = card.getPosition()
+    vec[2] = vec[2] + 0.5
+    takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gems,vec,gemAmount,true)
+    return true
+end
+
+function takeObjectsAndMoveThemSlowly(bag,dest,qty,onCards)
+    local lowerSend = -1
+    local upperSend = 1
+    if onCards == nil or onCards == false then
+        lowerSend = -0.5
+        upperSend = 0.5
+    end
     local objReuse
     local vec = Vector(dest[1],dest[2],dest[3])
     local j = 0
@@ -1598,8 +1638,12 @@ function takeObjectsAndMoveThemSlowly(bag,dest,qty)
         objReuse = bag.takeObject()
         vec = getRandomVectorFromLocation(vec,-1,1)
         objReuse.setPositionSmooth(vec,false,false)
+        if onCards then
+            storeAddGem(objReuse)
+        end
         --printToAll("Giving: " .. qty)
     end
+    return true
 end
 
 function getRandomVectorFromLocation(vec,_lower,_upper)
@@ -1664,5 +1708,54 @@ function copyVectorToVector(original,copy)
     copy[1] = original[1]
     copy[2] = original[2]
     copy[3] = original[3]
+    return true
+end
+
+function storeAddGem(gemObj)
+    m_iNumberOfGemsInTable = m_iNumberOfGemsInTable + 1
+    printToAll("storeAddGem: "..m_iNumberOfGemsInTable)
+    m_tbGemsOnCards[m_iNumberOfGemsInTable] = gemObj
+    return true
+end
+
+function storeRemoveGem(index)
+    m_tbGemsOnCards[index] = nil
+    return true
+end
+
+function storeEmptyGems()
+    m_tbGemsOnCards = {}
+    m_iNumberOfGemsInTable = 0
+    return true
+end
+
+function storeDestroyGem(index)
+    if m_tbGemsOnCards[index] == nil then
+        return false
+    end
+    m_tbGemsOnCards[index].destruct()
+    m_tbGemsOnCards[index] = nil
+    return true
+end
+
+function storeGetNextAvailableGem()
+    for i, v in ipairs(m_tbGemsOnCards) do
+        if v != nil then
+            return {i,v}
+        end
+    end
+    return false
+end
+
+function storeDestroyAllGems()
+    printToAll("storeDestroyAllGems: "..m_iNumberOfGemsInTable)
+    --for i = 1,m_iNumberOfGemsInTable,1 do
+    for i, v in ipairs(m_tbGemsOnCards) do
+        if v != nil then
+            printToAll(i)
+            storeDestroyGem(i)
+        end
+    end
+    
     return true
 end
