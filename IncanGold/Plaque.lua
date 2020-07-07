@@ -70,13 +70,21 @@ m_bSmoothMovement = false--Movecards smoothly
 m_bOverflowShown = false
 m_bUtilityLocationsOn = false
 
+--Buttons
+m_vecDebugButtonLocation = Vector(0,0,0)
+m_vecDebugButtonRotation = Vector(0,0,0)
+m_sDebugColor = ""
+
+m_iBtnDebugButton = -1 --ID for the Debug Button
+
 function onLoad()
+    createButtons()
     createMainButton()
-    createShowHideButton()
-    createSmoothMovementButton()
-    createOverflowShowHideButton()
-    createInteractableDeckButton()
-    createUtilityLocationsToggleButton()
+    --createShowHideButton()
+    --createSmoothMovementButton()
+    --createOverflowShowHideButton()
+    --createInteractableDeckButton()
+    --createUtilityLocationsToggleButton()
     
     setSmoothMovement(false)
     
@@ -990,108 +998,6 @@ function getTags(description, requiredElement)
     return _returnArray
 end
 
-function createMainButton()
-    local button_parameters = {}
-
-    button_parameters.click_function = "mainButton"
-    button_parameters.function_owner = self
-    button_parameters.position = {0,0,-21}
-    button_parameters.label = "Deal"
-    button_parameters.width = 2000
-    button_parameters.height = 800
-    button_parameters.font_size = 240
-    
-    self.createButton(button_parameters)
-    --Set reference
-    m_iBtnDeal = m_btnNumberOfButtons
-    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
-end
-
-function createShowHideButton()
-    local button_parameters = {}
-    
-    button_parameters.click_function = "toggleDeckVisibility"
-    button_parameters.function_owner = self
-    button_parameters.position = {-5.6,0,-21}
-    button_parameters.label = "Show/Hide"
-    button_parameters.width = 2000
-    button_parameters.height = 800
-    button_parameters.font_size = 240
-    
-    self.createButton(button_parameters)
-    --Set reference
-    m_iBtnShowHideButton = m_btnNumberOfButtons
-    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
-end
-
-function createSmoothMovementButton()
-    local button_parameters = {}
-    
-    button_parameters.click_function = "toggleSmoothMovement"
-    button_parameters.function_owner = self
-    button_parameters.position = {-5.6,0,-24}
-    button_parameters.label = "Show/Hide"
-    button_parameters.width = 2000
-    button_parameters.height = 800
-    button_parameters.font_size = 240
-    
-    self.createButton(button_parameters)
-    --Set reference
-    m_iBtnSmoothMovementButton = m_btnNumberOfButtons
-    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
-end
-
-function createOverflowShowHideButton()
-    local button_parameters = {}
-    
-    button_parameters.click_function = "toggleOverflowPaths"
-    button_parameters.function_owner = self
-    button_parameters.position = {-11,0,-21}
-    button_parameters.label = "Show/Hide"
-    button_parameters.width = 2000
-    button_parameters.height = 800
-    button_parameters.font_size = 240
-    
-    self.createButton(button_parameters)
-    --Set reference
-    m_iBtnOverflowShowHideButton = m_btnNumberOfButtons
-    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
-end
-
-function createInteractableDeckButton()
-    local button_parameters = {}
-    
-    button_parameters.click_function = "toggleDeckInteractable"
-    button_parameters.function_owner = self
-    button_parameters.position = {-11,0,-24}
-    button_parameters.label = "Interactable"
-    button_parameters.width = 2000
-    button_parameters.height = 800
-    button_parameters.font_size = 240
-    
-    self.createButton(button_parameters)
-    --Set reference
-    m_iBtnDeckInteractable = m_btnNumberOfButtons
-    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
-end
-
-function createUtilityLocationsToggleButton()
-    local button_parameters = {}
-    
-    button_parameters.click_function = "toggleUtilityLocations"
-    button_parameters.function_owner = self
-    button_parameters.position = {-16.5,0,-21}
-    button_parameters.label = "Show/Hide"
-    button_parameters.width = 2000
-    button_parameters.height = 800
-    button_parameters.font_size = 240
-    
-    self.createButton(button_parameters)
-    --Set reference
-    m_iBtnUtilityInteractable = m_btnNumberOfButtons
-    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
-end
-
 function setupDebugTimer()
     timerID = self.getGUID()..math.random(9999999999999)
     --Start timer which repeats forever, running countItems() every second
@@ -1758,4 +1664,306 @@ function storeDestroyAllGems()
     end
     
     return true
+end
+
+--
+--
+--  DEBUG BUTTONS
+--
+--
+
+function createButtons()
+    m_vecDebugButtonLocation = {-27,0,25}
+    m_vecDebugButtonRotation = {0,0,0}
+    createDebugOnOrOff()
+    createShowHideButton()
+    createSmoothMovementButton()
+    createOverflowShowHideButton()
+    createInteractableDeckButton()
+    createUtilityLocationsToggleButton()
+    moveDebugButtons("Red")
+end
+
+function createDebugOnOrOff()
+    local button_parameters = {}
+
+    button_parameters.click_function = "BTNCLICK_Debug"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1]
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3]
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "Debug On/Off"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    button_parameters.tooltip = "Turns on or off debuging options"
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnDebugButton = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function updateDebugOnOrOffTransform()
+    local button_parameters = {}
+    button_parameters.index = m_iBtnDebugButton
+    
+    if m_sDebugColor == "Red" then
+        button_parameters.position = {}
+        button_parameters.position[1] = m_vecDebugButtonLocation[1]
+        button_parameters.position[2] = m_vecDebugButtonLocation[2]
+        button_parameters.position[3] = m_vecDebugButtonLocation[3]
+    elseif m_sDebugColor == "White" then
+        button_parameters.position = {}
+        button_parameters.position[1] = m_vecDebugButtonLocation[1]
+        button_parameters.position[2] = m_vecDebugButtonLocation[2]
+        button_parameters.position[3] = m_vecDebugButtonLocation[3]
+    end
+    
+    self.editButton(button_parameters)
+end
+
+function createShowHideButton()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "toggleDeckVisibility"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] - 12
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + 3
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "Show/Hide"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    button_parameters.tooltip = "Shows or hides the deck"
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnShowHideButton = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function updateShowHideTransform()
+    local button_parameters = {}
+    button_parameters.index = m_iBtnShowHideButton
+    
+    if m_sDebugColor == "Red" then
+        button_parameters.position = {}
+        button_parameters.position[1] = m_vecDebugButtonLocation[1] - 12
+        button_parameters.position[2] = m_vecDebugButtonLocation[2]
+        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 3
+    elseif m_sDebugColor == "White" then
+        button_parameters.position = {}
+        button_parameters.position[1] = m_vecDebugButtonLocation[1]
+        button_parameters.position[2] = m_vecDebugButtonLocation[2]
+        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 3
+    end
+    
+    self.editButton(button_parameters)
+end
+
+function createSmoothMovementButton()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "toggleSmoothMovement"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] - 6
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + 3
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "Show/Hide"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnSmoothMovementButton = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function updateSmoothMovementTransform()
+    local button_parameters = {}
+    button_parameters.index = m_iBtnSmoothMovementButton
+    
+    if m_sDebugColor == "Red" then
+        button_parameters.position = {}
+        button_parameters.position[1] = m_vecDebugButtonLocation[1] - 6
+        button_parameters.position[2] = m_vecDebugButtonLocation[2]
+        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 3
+    elseif m_sDebugColor == "White" then
+        button_parameters.position = {}
+        button_parameters.position[1] = m_vecDebugButtonLocation[1] + 6
+        button_parameters.position[2] = m_vecDebugButtonLocation[2]
+        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 3
+    end
+    
+    self.editButton(button_parameters)
+end
+
+function createOverflowShowHideButton()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "toggleOverflowPaths"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1]
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + 3
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "Show/Hide"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnOverflowShowHideButton = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function updateOverflowShowHideTransform()
+    local button_parameters = {}
+    button_parameters.index = m_iBtnOverflowShowHideButton
+    
+    if m_sDebugColor == "Red" then
+        button_parameters.position = {}
+        button_parameters.position[1] = m_vecDebugButtonLocation[1]
+        button_parameters.position[2] = m_vecDebugButtonLocation[2]
+        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 3
+    elseif m_sDebugColor == "White" then
+        button_parameters.position = {}
+        button_parameters.position[1] = m_vecDebugButtonLocation[1] + 12
+        button_parameters.position[2] = m_vecDebugButtonLocation[2]
+        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 3
+    end
+    
+    self.editButton(button_parameters)
+end
+
+function createInteractableDeckButton()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "toggleDeckInteractable"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1]
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + 6
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "Interactable"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnDeckInteractable = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function updateInteractableDeckTransform()
+    local button_parameters = {}
+    button_parameters.index = m_iBtnDeckInteractable
+    
+    if m_sDebugColor == "Red" then
+        button_parameters.position = {}
+        button_parameters.position[1] = m_vecDebugButtonLocation[1]
+        button_parameters.position[2] = m_vecDebugButtonLocation[2]
+        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 6
+    elseif m_sDebugColor == "White" then
+        button_parameters.position = {}
+        button_parameters.position[1] = m_vecDebugButtonLocation[1] + 12
+        button_parameters.position[2] = m_vecDebugButtonLocation[2]
+        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 6
+    end
+    
+    self.editButton(button_parameters)
+end
+
+function createUtilityLocationsToggleButton()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "toggleUtilityLocations"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] - 6
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + 6
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "Show/Hide"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnUtilityInteractable = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function updateUtilityLocationsToggleTransform()
+    local button_parameters = {}
+    button_parameters.index = m_iBtnUtilityInteractable
+    
+    if m_sDebugColor == "Red" then
+        button_parameters.position = {}
+        button_parameters.position[1] = m_vecDebugButtonLocation[1] - 6
+        button_parameters.position[2] = m_vecDebugButtonLocation[2]
+        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 6
+    elseif m_sDebugColor == "White" then
+        button_parameters.position = {}
+        button_parameters.position[1] = m_vecDebugButtonLocation[1] + 6
+        button_parameters.position[2] = m_vecDebugButtonLocation[2]
+        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 6
+    end
+    
+    self.editButton(button_parameters)
+end
+
+function moveDebugButtons(color)
+    m_sDebugColor = color;
+    if color == "Red" then
+        m_vecDebugButtonLocation = {-27,0,25}
+        m_vecDebugButtonRotation = {0,0,0}
+    elseif color == "White" then
+        m_vecDebugButtonLocation = {27,0,25}
+        m_vecDebugButtonRotation = {0,0,0}
+    end
+    updateDebugOnOrOffTransform()
+    
+    updateShowHideTransform()
+    updateSmoothMovementTransform()
+    updateOverflowShowHideTransform()
+    
+    updateInteractableDeckTransform()
+    updateUtilityLocationsToggleTransform()
+end
+
+--
+--
+--  PLAYING BUTTONS
+--
+--
+
+function createMainButton()
+    local button_parameters = {}
+
+    button_parameters.click_function = "mainButton"
+    button_parameters.function_owner = self
+    button_parameters.position = {0,0,-21}
+    button_parameters.label = "Deal"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnDeal = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
 end
