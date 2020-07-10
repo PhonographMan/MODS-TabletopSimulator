@@ -18,11 +18,7 @@ m_tbMoneyBags = nil -- Money Bags
 
 m_btnNumberOfButtons = 0
 m_iBtnDeal = -1 --Deal Button
-m_iBtnShowHideButton = -1 --Deal Button
-m_iBtnOverflowShowHideButton = -1 --Show Hide Overflow
-m_iBtnSmoothMovementButton = -1 --SmoothMovement
-m_iBtnDeckInteractable = -1 --SmoothMovement
-m_iBtnUtilityInteractable = -1 --SmoothMovement
+
 
 m_tbGUIDinDescription = {} -- Tags in Description
 
@@ -57,8 +53,8 @@ m_iNumberOfCardsInDeck = 0
 m_bWaitingForPlayerResponce = false
 m_iCurrentGems = 0
 m_iCurrentArtifacts = 0
-m_iMaxGemsInFrontOfPlayer = 0
 m_tbGemsOnCards = {} --Holds objs for the gems
+m_iMaxGemsInFrontOfPlayer = 0
 m_iNumberOfGemsInTable = 0 --How many gems in above
 
 --Deck Recovery
@@ -76,6 +72,23 @@ m_vecDebugButtonRotation = Vector(0,0,0)
 m_sDebugColor = ""
 
 m_iBtnDebugButton = -1 --ID for the Debug Button
+m_iBtnShowHideButton = -1 --ID for the Show Hide Button
+m_iBtnOverflowShowHideButton = -1 --Show Hide Overflow
+m_iBtnSmoothMovementButton = -1 --SmoothMovement
+m_iBtnDeckInteractable = -1 --SmoothMovement
+m_iBtnUtilityInteractable = -1 --Utility Button
+
+m_iBtnPlayerDebugMoveButtons = -1 --Color debug option: Move player
+m_iBtnPlayerInDebugButtons = -1 --Color debug option: Players in
+
+m_iBtnDebugGreen = -1 --Colors: Green
+m_iBtnDebugBlue = -1 --Colors: Blue
+m_iBtnDebugPurple = -1 --Colors: Purple
+m_iBtnDebugPink = -1 --Colors: Pink
+m_iBtnDebugWhite = -1 --Colors: White
+m_iBtnDebugRed = -1 --Colors: Red
+m_iBtnDebugOrange = -1 --Colors: Orange
+m_iBtnDebugYellow = -1 --Colors: Yellow
 
 function onLoad()
     createButtons()
@@ -108,7 +121,7 @@ function onLoad()
     local obj
     for _,obj in ipairs(getAllObjects()) do
         if obj.tag == 'Fog' then
-            printToAll(obj.getValue())
+            --printToAll(obj.getValue())
             --if obj.getValue() == "Red" then
             --    obj.setValue("White")
             --end
@@ -133,7 +146,6 @@ function mainButton()
     if m_iRoundNumber == 0 then
         m_iNumberOfArtifactsThisGame = 0
         m_iRoundNumber = m_iRoundNumber + 1
-        updateInPlayers()
         mergeHazardCardsToMainDeck()
         hazardCardsEmpty()
         retractAllCardsToDeck()
@@ -146,6 +158,7 @@ function mainButton()
     elseif m_bRoundIsOn and m_bWaitingForPlayerResponce == false then
         if m_bReadyForNextCard == true then
             if m_bShuffleBeforeDeal then
+                updateInPlayers()
                 artifactDeckShuffle()
                 dealArtifactToMainDeck()
                 m_bShuffleBeforeDeal = false
@@ -162,8 +175,13 @@ function mainButton()
                     m_bAreInOverflow = false
                     setDeckButtonLabel("Start new round")
                 end
+                m_iNumberOfGemsInTable = 0
+                m_iMaxGemsInFrontOfPlayer = 0
             else
                 setDeckButtonLabel("Deal")
+                if m_iMaxGemsInFrontOfPlayer > 0 or m_iNumberOfGemsInTable >  0 then
+                    givePlayersStayLeave()
+                end
             end
         else
             printToAll("Wooah there buddy. Slow that click down a little.")
@@ -265,12 +283,17 @@ function dealCardInRound()
             end
         elseif cardType == "gem" then
             local gemValue = getGemAmountFromDesc(card.getDescription())
-            
+            local valueForPlayers = getGemAmountPerPerson(gemValue)
+            local valueForCards = getAmountOfGemsOnCard(gemValue)
             printToAll("Gem Card value: " .. gemValue)
-            printToAll("Per Person: "..getGemAmountPerPerson(gemValue))
-            printToAll("On Card: "..getAmountOfGemsOnCard(gemValue))
-            giveGemsToSeatedPlayers(getGemAmountPerPerson(gemValue))
-            giveGemsToCards(getAmountOfGemsOnCard(gemValue),card)
+            printToAll("Per Person: "..valueForPlayers)
+            printToAll("On Card: "..valueForCards)
+            printToAll("---------------------")
+            giveGemsToSeatedPlayers(valueForPlayers)
+            giveGemsToCards(valueForCards,card)
+            
+            m_iMaxGemsInFrontOfPlayer = m_iMaxGemsInFrontOfPlayer + valueForPlayers
+            m_iNumberOfGemsInTable = m_iMaxGemsInFrontOfPlayer + valueForCards
         end
     end
     m_iCurrentPath = m_iCurrentPath + 1
@@ -333,6 +356,8 @@ function resetRound()
     m_bShuffleBeforeDeal = true
     m_iCurrentGems = 0
     m_iCurrentArtifacts = 0
+    m_iMaxGemsInFrontOfPlayer = 0
+    m_iNumberOfGemsInTable = 0
     m_iMaxGemsInFrontOfPlayer = 0
     return true
 end
@@ -814,7 +839,7 @@ function deckRecovery_ifDeckSetDeck(obj,cardTags)
                 --is part of the main deck in this deck
                 m_objMainDeck = obj
                 m_bNeedRecovery = false
-                printToAll("Found the deck! Thank you. Clicking too quickly can cause me to lose it.")
+                --printToAll("Found the deck! Thank you. Clicking too quickly can cause me to lose it.")
                 return true
             end
         end
@@ -837,7 +862,7 @@ function takeOutArtifactsInToNewDeck()
         for j, w in ipairs(cardTags) do
             if getCardTypeFromSingleTag(w) == "artifact" then
                 --There is an artifact
-                printToAll(j)
+                --printToAll(j)--Debugging
                 --local artifactCard = getObjectFromGUID(v.guid)
                 local mytable = {}
                 mytable.guid = v.guid
@@ -1080,12 +1105,12 @@ end
 
 function artifcatDeckRecovery_ifDeckSetDeck(obj,cardTags)
     for j, w in ipairs(cardTags) do
-        printToAll(j .. ": " .. w)
+        --printToAll(j .. ": " .. w)
         if getCardTypeFromSingleTag(w) ~= false then
             --Basically there is a playing card which we think
             --is part of the main deck in this deck
             m_objArtifcatDeck = obj
-            printToAll("Found the artifcat deck!")
+            --printToAll("Found the artifcat deck!")
             return true
         end
     end
@@ -1199,7 +1224,11 @@ function createDefaultSinglePlayerTable()
     singlePlayer.areInGame = false
     singlePlayer.areInRoom = false
     singlePlayer.objCardStay = nil
+    singlePlayer.objCardStayInZone = false
+    singlePlayer.objCardStayInDrop = false
     singlePlayer.objCardLeave = nil
+    singlePlayer.objCardLeaveInZone = false
+    singlePlayer.objCardLeaveInDrop = false
     singlePlayer.objOutsideTenCounter = nil
     return singlePlayer
 end
@@ -1252,7 +1281,7 @@ function hideAllStayLeaveCards()
         end
         if m_tbPlayerInformation[v].objCardLeave ~= nil then
             m_tbPlayerInformation[v].objCardLeave.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey"})
-            m_tbPlayerInformation[v].objCardStay.interactable = false
+            m_tbPlayerInformation[v].objCardLeave.interactable = false
         end
     end
 end
@@ -1313,6 +1342,31 @@ function updateInPlayers()
     for i, v in ipairs(seatedPlayers) do
         m_tbPlayerInformation[v].areInRound = true
     end
+    
+    if m_bPlayersInOverride_Green then
+        m_tbPlayerInformation["Green"].areInRound = true
+    end
+    if m_bPlayersInOverride_Blue then
+        m_tbPlayerInformation["Blue"].areInRound = true
+    end
+    if m_bPlayersInOverride_Purple then
+        m_tbPlayerInformation["Purple"].areInRound = true
+    end
+    if m_bPlayersInOverride_Pink then
+        m_tbPlayerInformation["Pink"].areInRound = true
+    end
+    if m_bPlayersInOverride_White then
+        m_tbPlayerInformation["White"].areInRound = true
+    end
+    if m_bPlayersInOverride_Red then
+        m_tbPlayerInformation["Red"].areInRound = true
+    end
+    if m_bPlayersInOverride_Orange then
+        m_tbPlayerInformation["Orange"].areInRound = true
+    end
+    if m_bPlayersInOverride_Yellow then
+        m_tbPlayerInformation["Yellow"].areInRound = true
+    end
 end
 
 function getNumberOfPlayersInRound()
@@ -1320,7 +1374,7 @@ function getNumberOfPlayersInRound()
     local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
     for i, v in ipairs(colorsInOrder) do
         if m_tbPlayerInformation[v].areInRound then
-            playersInRound = playersInRound + 2
+            playersInRound = playersInRound + 1
         end
     end
     return playersInRound;
@@ -1606,7 +1660,7 @@ function createMoneyBagsTable()
     if moneyBagsTable.artifact_5 == nil or moneyBagsTable.artifact_5 == false then
         printToAll("createMoneyBagsTable: Could not find artifact_5")
     end
-    printToAll("createMoneyBagsTable: Found money bags")
+    --printToAll("createMoneyBagsTable: Found money bags")
     return moneyBagsTable
 end
 
@@ -1619,7 +1673,7 @@ end
 
 function storeAddGem(gemObj)
     m_iNumberOfGemsInTable = m_iNumberOfGemsInTable + 1
-    printToAll("storeAddGem: "..m_iNumberOfGemsInTable)
+    --printToAll("storeAddGem: "..m_iNumberOfGemsInTable)
     m_tbGemsOnCards[m_iNumberOfGemsInTable] = gemObj
     return true
 end
@@ -1662,8 +1716,121 @@ function storeDestroyAllGems()
             storeDestroyGem(i)
         end
     end
-    
+    m_iNumberOfGemsInTable = 0
     return true
+end
+
+--
+--
+--  COLOR FUNCTIONS
+--
+--
+
+function getColorWhite()
+    return {1, 1, 1}
+end
+
+function getColorBrown()
+    return {0.443, 0.231, 0.09}
+end
+
+function getColorRed()
+    return {0.856, 0.1, 0.094}
+end
+
+function getColorOrange()
+    return {0.956, 0.392, 0.113}
+end
+
+function getColorYellow()
+    return {0.905, 0.898, 0.172}
+end
+
+function getColorGreen()
+    return {0.192, 0.701, 0.168}
+end
+
+function getColorTeal()
+    return {0.129, 0.694, 0.607}
+end
+
+function getColorBlue()
+    return {0.118, 0.53, 1}
+end
+
+function getColorPurple()
+    return {0.627, 0.125, 0.941}
+end
+
+function getColorPink()
+    return {0.96, 0.439, 0.807}
+end
+
+function getColorGrey()
+    return {0.5, 0.5, 0.5}
+end
+
+function getColorBlack()
+    return {0.25, 0.25, 0.25}
+end
+
+--
+--
+--  GENERIC BUTTON FUNCTIONS
+--
+--
+
+function setButtonLabel(buttonIndex, buttonLabel)
+    local button_parameters = {}
+    button_parameters.index = buttonIndex
+    
+    button_parameters.label = buttonLabel
+    
+    self.editButton(button_parameters)
+end
+
+function setButtonColor(buttonIndex, backgroundColor, fontColor, hoverColor, pressColor)
+    local button_parameters = {}
+    button_parameters.index = buttonIndex
+    
+    if backgroundColor != nil then
+        button_parameters.color = {}
+        button_parameters.color[1] = backgroundColor[1]
+        button_parameters.color[2] = backgroundColor[2]
+        button_parameters.color[3] = backgroundColor[3]
+        button_parameters.color[4] = backgroundColor[4]
+    end
+    if fontColor != nil then
+        button_parameters.font_color = {}
+        button_parameters.font_color[1] = fontColor[1]
+        button_parameters.font_color[2] = fontColor[2]
+        button_parameters.font_color[3] = fontColor[3]
+        button_parameters.font_color[4] = fontColor[4]
+    end
+    if hoverColor != nil then
+        button_parameters.hover_color = {}
+        button_parameters.hover_color[1] = hoverColor[1]
+        button_parameters.hover_color[2] = hoverColor[2]
+        button_parameters.hover_color[3] = hoverColor[3]
+        button_parameters.hover_color[4] = hoverColor[4]
+    end
+    if pressColor != nil then
+        button_parameters.press_color = {}
+        button_parameters.press_color[1] = pressColor[1]
+        button_parameters.press_color[2] = pressColor[2]
+        button_parameters.press_color[3] = pressColor[3]
+        button_parameters.press_color[4] = pressColor[4]
+    end
+    
+    self.editButton(button_parameters)
+end
+
+function setButtonClickableColors(buttonIndex)
+    setButtonColor(buttonIndex,getColorWhite(),getColorBlack())
+end
+
+function setButtonDisabledColors(buttonIndex)
+    setButtonColor(buttonIndex,getColorGrey(),getColorWhite())
 end
 
 --
@@ -1681,7 +1848,23 @@ function createButtons()
     createOverflowShowHideButton()
     createInteractableDeckButton()
     createUtilityLocationsToggleButton()
+    
+    createPlayerOptionMoveDebugToggle()
+    createPlayerOptionPlayersInDebugToggle()
+    
+    createPlayerButtonColorGreen()
+    createPlayerButtonColorBlue()
+    createPlayerButtonColorPurple()
+    createPlayerButtonColorPink()
+    
+    createPlayerButtonColorWhite()
+    createPlayerButtonColorRed()
+    createPlayerButtonColorOrange()
+    createPlayerButtonColorYellow()
+    
     moveDebugButtons("Red")
+    debugSetPlayerInSetup()
+    debugSetPlayerWithButtonsSetup()
 end
 
 function createDebugOnOrOff()
@@ -1747,21 +1930,17 @@ function createShowHideButton()
     m_btnNumberOfButtons = m_btnNumberOfButtons + 1
 end
 
-function updateShowHideTransform()
+function updateShowHideTransform(leftTopMostOffset)
+    if leftTopMostOffset == nil or leftTopMostOffset == false then
+         return false
+    end
     local button_parameters = {}
     button_parameters.index = m_iBtnShowHideButton
     
-    if m_sDebugColor == "Red" then
-        button_parameters.position = {}
-        button_parameters.position[1] = m_vecDebugButtonLocation[1] - 12
-        button_parameters.position[2] = m_vecDebugButtonLocation[2]
-        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 3
-    elseif m_sDebugColor == "White" then
-        button_parameters.position = {}
-        button_parameters.position[1] = m_vecDebugButtonLocation[1]
-        button_parameters.position[2] = m_vecDebugButtonLocation[2]
-        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 3
-    end
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + leftTopMostOffset[1]
+    button_parameters.position[2] = m_vecDebugButtonLocation[2] + leftTopMostOffset[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + leftTopMostOffset[3]
     
     self.editButton(button_parameters)
 end
@@ -1787,21 +1966,17 @@ function createSmoothMovementButton()
     m_btnNumberOfButtons = m_btnNumberOfButtons + 1
 end
 
-function updateSmoothMovementTransform()
+function updateSmoothMovementTransform(leftTopMostOffset)
+    if leftTopMostOffset == nil or leftTopMostOffset == false then
+         return false
+    end
     local button_parameters = {}
     button_parameters.index = m_iBtnSmoothMovementButton
     
-    if m_sDebugColor == "Red" then
-        button_parameters.position = {}
-        button_parameters.position[1] = m_vecDebugButtonLocation[1] - 6
-        button_parameters.position[2] = m_vecDebugButtonLocation[2]
-        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 3
-    elseif m_sDebugColor == "White" then
-        button_parameters.position = {}
-        button_parameters.position[1] = m_vecDebugButtonLocation[1] + 6
-        button_parameters.position[2] = m_vecDebugButtonLocation[2]
-        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 3
-    end
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + leftTopMostOffset[1] + 6
+    button_parameters.position[2] = m_vecDebugButtonLocation[2] + leftTopMostOffset[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + leftTopMostOffset[3]
     
     self.editButton(button_parameters)
 end
@@ -1827,21 +2002,17 @@ function createOverflowShowHideButton()
     m_btnNumberOfButtons = m_btnNumberOfButtons + 1
 end
 
-function updateOverflowShowHideTransform()
+function updateOverflowShowHideTransform(leftTopMostOffset)
+    if leftTopMostOffset == nil or leftTopMostOffset == false then
+         return false
+    end
     local button_parameters = {}
     button_parameters.index = m_iBtnOverflowShowHideButton
     
-    if m_sDebugColor == "Red" then
-        button_parameters.position = {}
-        button_parameters.position[1] = m_vecDebugButtonLocation[1]
-        button_parameters.position[2] = m_vecDebugButtonLocation[2]
-        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 3
-    elseif m_sDebugColor == "White" then
-        button_parameters.position = {}
-        button_parameters.position[1] = m_vecDebugButtonLocation[1] + 12
-        button_parameters.position[2] = m_vecDebugButtonLocation[2]
-        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 3
-    end
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + leftTopMostOffset[1] + 12
+    button_parameters.position[2] = m_vecDebugButtonLocation[2] + leftTopMostOffset[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + leftTopMostOffset[3]
     
     self.editButton(button_parameters)
 end
@@ -1867,21 +2038,17 @@ function createInteractableDeckButton()
     m_btnNumberOfButtons = m_btnNumberOfButtons + 1
 end
 
-function updateInteractableDeckTransform()
+function updateInteractableDeckTransform(leftTopMostOffset)
+    if leftTopMostOffset == nil or leftTopMostOffset == false then
+         return false
+    end
     local button_parameters = {}
     button_parameters.index = m_iBtnDeckInteractable
     
-    if m_sDebugColor == "Red" then
-        button_parameters.position = {}
-        button_parameters.position[1] = m_vecDebugButtonLocation[1]
-        button_parameters.position[2] = m_vecDebugButtonLocation[2]
-        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 6
-    elseif m_sDebugColor == "White" then
-        button_parameters.position = {}
-        button_parameters.position[1] = m_vecDebugButtonLocation[1] + 12
-        button_parameters.position[2] = m_vecDebugButtonLocation[2]
-        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 6
-    end
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + leftTopMostOffset[1]
+    button_parameters.position[2] = m_vecDebugButtonLocation[2] + leftTopMostOffset[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + leftTopMostOffset[3] + 3
     
     self.editButton(button_parameters)
 end
@@ -1907,43 +2074,449 @@ function createUtilityLocationsToggleButton()
     m_btnNumberOfButtons = m_btnNumberOfButtons + 1
 end
 
-function updateUtilityLocationsToggleTransform()
+function updateUtilityLocationsToggleTransform(leftTopMostOffset)
+    if leftTopMostOffset == nil or leftTopMostOffset == false then
+         return false
+    end
     local button_parameters = {}
     button_parameters.index = m_iBtnUtilityInteractable
     
-    if m_sDebugColor == "Red" then
-        button_parameters.position = {}
-        button_parameters.position[1] = m_vecDebugButtonLocation[1] - 6
-        button_parameters.position[2] = m_vecDebugButtonLocation[2]
-        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 6
-    elseif m_sDebugColor == "White" then
-        button_parameters.position = {}
-        button_parameters.position[1] = m_vecDebugButtonLocation[1] + 6
-        button_parameters.position[2] = m_vecDebugButtonLocation[2]
-        button_parameters.position[3] = m_vecDebugButtonLocation[3] + 6
-    end
+    
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + leftTopMostOffset[1] + 6
+    button_parameters.position[2] = m_vecDebugButtonLocation[2] + leftTopMostOffset[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + leftTopMostOffset[3] + 3
     
     self.editButton(button_parameters)
 end
 
+function createPlayerOptionMoveDebugToggle()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "BTNCLICK_DebugSelectDebugger"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1]
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + 6
+    
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "Show/Hide"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnPlayerDebugMoveButtons = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function updatePlayerOptionMoveDebugTransform(leftTopMostOffset)
+    if leftTopMostOffset == nil or leftTopMostOffset == false then
+         return false
+    end
+    local button_parameters = {}
+    button_parameters.index = m_iBtnPlayerDebugMoveButtons
+    
+    
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + leftTopMostOffset[1]
+    button_parameters.position[2] = m_vecDebugButtonLocation[2] + leftTopMostOffset[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + leftTopMostOffset[3] + 6
+    
+    self.editButton(button_parameters)
+end
+
+function createPlayerOptionPlayersInDebugToggle()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "BTNCLICK_DebugPlayerIn"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + 6
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + 6
+    
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "Show/Hide"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnPlayerInDebugButtons = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function updatePlayerOptionPlayersInDebugTransform(leftTopMostOffset)
+    if leftTopMostOffset == nil or leftTopMostOffset == false then
+         return false
+    end
+    local button_parameters = {}
+    button_parameters.index = m_iBtnPlayerInDebugButtons
+    
+    
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + leftTopMostOffset[1] + 6
+    button_parameters.position[2] = m_vecDebugButtonLocation[2] + leftTopMostOffset[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + leftTopMostOffset[3] + 6
+    
+    self.editButton(button_parameters)
+end
+
+--
+--  DEBUG COLORS
+--
+
+function createPlayerButtonColorGreen()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "BTNCLICK_DebugColorGreen"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1]
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + 9
+    
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "Green"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnDebugGreen = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function updatePlayerButtonColorGreenTransform(leftTopMostOffset)
+    if leftTopMostOffset == nil or leftTopMostOffset == false then
+         return false
+    end
+    local button_parameters = {}
+    button_parameters.index = m_iBtnDebugGreen
+    
+    
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + leftTopMostOffset[1]
+    button_parameters.position[2] = m_vecDebugButtonLocation[2] + leftTopMostOffset[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + leftTopMostOffset[3] + 9
+    
+    self.editButton(button_parameters)
+end
+
+function createPlayerButtonColorBlue()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "BTNCLICK_DebugColorBlue"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + 6
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + 9
+    
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "Blue"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnDebugBlue = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function updatePlayerButtonColorBlueTransform(leftTopMostOffset)
+    if leftTopMostOffset == nil or leftTopMostOffset == false then
+         return false
+    end
+    local button_parameters = {}
+    button_parameters.index = m_iBtnDebugBlue
+    
+    
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + leftTopMostOffset[1] + 6
+    button_parameters.position[2] = m_vecDebugButtonLocation[2] + leftTopMostOffset[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + leftTopMostOffset[3] + 9
+    
+    self.editButton(button_parameters)
+end
+
+function createPlayerButtonColorPurple()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "BTNCLICK_DebugColorPurple"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + 12
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + 9
+    
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "Purple"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnDebugPurple = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function updatePlayerButtonColorPurpleTransform(leftTopMostOffset)
+    if leftTopMostOffset == nil or leftTopMostOffset == false then
+         return false
+    end
+    local button_parameters = {}
+    button_parameters.index = m_iBtnDebugPurple
+    
+    
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + leftTopMostOffset[1] + 12
+    button_parameters.position[2] = m_vecDebugButtonLocation[2] + leftTopMostOffset[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + leftTopMostOffset[3] + 9
+    
+    self.editButton(button_parameters)
+end
+
+function createPlayerButtonColorPink()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "BTNCLICK_DebugColorPink"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + 18
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + 9
+    
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "Pink"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnDebugPink = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function updatePlayerButtonColorPinkTransform(leftTopMostOffset)
+    if leftTopMostOffset == nil or leftTopMostOffset == false then
+         return false
+    end
+    local button_parameters = {}
+    button_parameters.index = m_iBtnDebugPink
+    
+    
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + leftTopMostOffset[1] + 18
+    button_parameters.position[2] = m_vecDebugButtonLocation[2] + leftTopMostOffset[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + leftTopMostOffset[3] + 9
+    
+    self.editButton(button_parameters)
+end
+
+function createPlayerButtonColorWhite()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "BTNCLICK_DebugColorWhite"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1]
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + 12
+    
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "White"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnDebugWhite = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function updatePlayerButtonColorWhiteTransform(leftTopMostOffset)
+    if leftTopMostOffset == nil or leftTopMostOffset == false then
+         return false
+    end
+    local button_parameters = {}
+    button_parameters.index = m_iBtnDebugWhite
+    
+    
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + leftTopMostOffset[1]
+    button_parameters.position[2] = m_vecDebugButtonLocation[2] + leftTopMostOffset[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + leftTopMostOffset[3] + 12
+    
+    self.editButton(button_parameters)
+end
+
+function createPlayerButtonColorRed()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "BTNCLICK_DebugColorRed"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + 6
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + 12
+    
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "Red"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnDebugRed = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function updatePlayerButtonColorRedTransform(leftTopMostOffset)
+    if leftTopMostOffset == nil or leftTopMostOffset == false then
+         return false
+    end
+    local button_parameters = {}
+    button_parameters.index = m_iBtnDebugRed
+    
+    
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + leftTopMostOffset[1] + 6
+    button_parameters.position[2] = m_vecDebugButtonLocation[2] + leftTopMostOffset[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + leftTopMostOffset[3] + 12
+    
+    self.editButton(button_parameters)
+end
+
+function createPlayerButtonColorOrange()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "BTNCLICK_DebugColorOrange"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + 12
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + 12
+    
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "Orange"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnDebugOrange = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function updatePlayerButtonColorOrangeTransform(leftTopMostOffset)
+    if leftTopMostOffset == nil or leftTopMostOffset == false then
+         return false
+    end
+    local button_parameters = {}
+    button_parameters.index = m_iBtnDebugOrange
+    
+    
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + leftTopMostOffset[1] + 12
+    button_parameters.position[2] = m_vecDebugButtonLocation[2] + leftTopMostOffset[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + leftTopMostOffset[3] + 12
+    
+    self.editButton(button_parameters)
+end
+
+function createPlayerButtonColorYellow()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "BTNCLICK_DebugColorYellow"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + 18
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + 12
+    
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "Yellow"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnDebugYellow = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+function updatePlayerButtonColorYellowTransform(leftTopMostOffset)
+    if leftTopMostOffset == nil or leftTopMostOffset == false then
+         return false
+    end
+    local button_parameters = {}
+    button_parameters.index = m_iBtnDebugYellow
+    
+    
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] + leftTopMostOffset[1] + 18
+    button_parameters.position[2] = m_vecDebugButtonLocation[2] + leftTopMostOffset[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + leftTopMostOffset[3] + 12
+    
+    self.editButton(button_parameters)
+end
+
+--
+--  MOVEMENT
+--
+
 function moveDebugButtons(color)
+    local leftTopMostOffset = Vector(0,0,0)
+    
     m_sDebugColor = color;
     if color == "Red" then
         m_vecDebugButtonLocation = {-27,0,25}
         m_vecDebugButtonRotation = {0,0,0}
+        
+        leftTopMostOffset[1] = leftTopMostOffset[1] - (6 * 3)
+        leftTopMostOffset[3] = leftTopMostOffset[3] + 3
     elseif color == "White" then
         m_vecDebugButtonLocation = {27,0,25}
         m_vecDebugButtonRotation = {0,0,0}
+        
+        leftTopMostOffset[3] = leftTopMostOffset[3] + 3
     end
     updateDebugOnOrOffTransform()
     
-    updateShowHideTransform()
-    updateSmoothMovementTransform()
-    updateOverflowShowHideTransform()
+    updateShowHideTransform(leftTopMostOffset)
+    updateSmoothMovementTransform(leftTopMostOffset)
+    updateOverflowShowHideTransform(leftTopMostOffset)
     
-    updateInteractableDeckTransform()
-    updateUtilityLocationsToggleTransform()
+    updateInteractableDeckTransform(leftTopMostOffset)
+    updateUtilityLocationsToggleTransform(leftTopMostOffset)
+    
+    updatePlayerOptionMoveDebugTransform(leftTopMostOffset)updatePlayerOptionPlayersInDebugTransform(leftTopMostOffset)
+    
+    updatePlayerButtonColorGreenTransform(leftTopMostOffset)
+    updatePlayerButtonColorBlueTransform(leftTopMostOffset)
+    updatePlayerButtonColorPurpleTransform(leftTopMostOffset)
+    updatePlayerButtonColorPinkTransform(leftTopMostOffset)
+    
+    updatePlayerButtonColorWhiteTransform(leftTopMostOffset)
+    updatePlayerButtonColorRedTransform(leftTopMostOffset)
+    updatePlayerButtonColorOrangeTransform(leftTopMostOffset)
+    updatePlayerButtonColorYellowTransform(leftTopMostOffset)
 end
+
+
 
 --
 --
@@ -1966,4 +2539,346 @@ function createMainButton()
     --Set reference
     m_iBtnDeal = m_btnNumberOfButtons
     m_btnNumberOfButtons = m_btnNumberOfButtons + 1
+end
+
+--
+--
+--  DEBUG METHODS
+--
+--
+
+m_iDebugSettingsPlayer = 0
+m_bPlayersInOverride_Green = false
+m_bPlayersInOverride_Blue = false
+m_bPlayersInOverride_Purple = false
+m_bPlayersInOverride_Pink = false
+m_bPlayersInOverride_White = false
+m_bPlayersInOverride_Red = false
+m_bPlayersInOverride_Orange = false
+m_bPlayersInOverride_Yellow = false
+
+
+--setButtonColor(buttonIndex, backgroundColor, fontColor, hoverColor, pressColor)
+
+--obj: The Object the button is attached to.
+--player_clicker_color: Player Color of the player that pressed the button.
+--alt_click: True if a button other than left-click was used to click the button.
+function BTNCLICK_DebugSelectDebugger(obj, player_clicker_color, alt_click)
+    debugSetPlayerWithButtonsSetup()
+end
+
+function debugSetPlayerWithButtonsSetup()
+    m_iDebugSettingsPlayer = 0
+    setButtonLabel(m_iBtnPlayerDebugMoveButtons,"Select Debugger")
+    --Make this button highlighted
+    setButtonClickableColors(m_iBtnPlayerDebugMoveButtons)
+    --Make other buttons not
+    setButtonDisabledColors(m_iBtnPlayerInDebugButtons)
+    updateColorsForDebugLocation()
+end
+
+function BTNCLICK_DebugPlayerIn(obj, player_clicker_color, alt_click)
+    debugSetPlayerInSetup()
+end
+
+
+function debugSetPlayerInSetup()
+    m_iDebugSettingsPlayer = 1
+    setButtonLabel(m_iBtnPlayerInDebugButtons,"Players in")
+    --Make this button highlighted
+    setButtonClickableColors(m_iBtnPlayerInDebugButtons)
+    --Make other buttons not
+    setButtonDisabledColors(m_iBtnPlayerDebugMoveButtons)
+    --Update Colors
+    updateColorsForPlayersIn()
+end
+
+
+function BTNCLICK_DebugColorGreen(obj, player_clicker_color, alt_click)
+    if m_iDebugSettingsPlayer == 1 then
+        if m_bPlayersInOverride_Green then
+            m_bPlayersInOverride_Green = false
+            setButtonColor(m_iBtnDebugGreen,getColorGrey())
+        else
+            m_bPlayersInOverride_Green = true
+            setButtonColor(m_iBtnDebugGreen,getColorGreen())
+
+        end
+    end
+end
+
+function BTNCLICK_DebugColorBlue(obj, player_clicker_color, alt_click)
+    if m_iDebugSettingsPlayer == 1 then
+        if m_bPlayersInOverride_Blue then
+            m_bPlayersInOverride_Blue = false
+            setButtonColor(m_iBtnDebugBlue,getColorGrey())
+        else
+            m_bPlayersInOverride_Blue = true
+            setButtonColor(m_iBtnDebugBlue,getColorBlue())
+
+        end
+    end
+end
+
+function BTNCLICK_DebugColorPurple(obj, player_clicker_color, alt_click)
+    if m_iDebugSettingsPlayer == 1 then
+        if m_bPlayersInOverride_Purple then
+            m_bPlayersInOverride_Purple = false
+            setButtonColor(m_iBtnDebugPurple,getColorGrey())
+        else
+            m_bPlayersInOverride_Purple = true
+            setButtonColor(m_iBtnDebugPurple,getColorPurple())
+
+        end
+    end
+end
+
+function BTNCLICK_DebugColorPink(obj, player_clicker_color, alt_click)
+    if m_iDebugSettingsPlayer == 1 then
+        if m_bPlayersInOverride_Pink then
+            m_bPlayersInOverride_Pink = false
+            setButtonColor(m_iBtnDebugPink,getColorGrey())
+        else
+            m_bPlayersInOverride_Pink = true
+            setButtonColor(m_iBtnDebugPink,getColorPink())
+
+        end
+    end
+end
+
+function BTNCLICK_DebugColorWhite(obj, player_clicker_color, alt_click)
+    if m_iDebugSettingsPlayer == 1 then
+        if m_bPlayersInOverride_White then
+            m_bPlayersInOverride_White = false
+            setButtonColor(m_iBtnDebugWhite,getColorGrey())
+        else
+            m_bPlayersInOverride_White = true
+            setButtonColor(m_iBtnDebugWhite,getColorWhite())
+
+        end
+    end
+end
+
+function BTNCLICK_DebugColorRed(obj, player_clicker_color, alt_click)
+    if m_iDebugSettingsPlayer == 1 then
+        if m_bPlayersInOverride_Red then
+            m_bPlayersInOverride_Red = false
+            setButtonColor(m_iBtnDebugRed,getColorGrey())
+        else
+            m_bPlayersInOverride_Red = true
+            setButtonColor(m_iBtnDebugRed,getColorRed())
+
+        end
+    end
+end
+
+function BTNCLICK_DebugColorOrange(obj, player_clicker_color, alt_click)
+    if m_iDebugSettingsPlayer == 1 then
+        if m_bPlayersInOverride_Orange then
+            m_bPlayersInOverride_Orange = false
+            setButtonColor(m_iBtnDebugOrange,getColorGrey())
+        else
+            m_bPlayersInOverride_Orange = true
+            setButtonColor(m_iBtnDebugOrange,getColorOrange())
+
+        end
+    end
+end
+
+function BTNCLICK_DebugColorYellow(obj, player_clicker_color, alt_click)
+    if m_iDebugSettingsPlayer == 1 then
+        if m_bPlayersInOverride_Yellow then
+            m_bPlayersInOverride_Yellow = false
+            setButtonColor(m_iBtnDebugYellow,getColorGrey())
+        else
+            m_bPlayersInOverride_Yellow = true
+            setButtonColor(m_iBtnDebugYellow,getColorYellow())
+
+        end
+    end
+end
+
+function updateColorsForDebugLocation()
+    local color = string.lower(m_sDebugColor)
+    setButtonColor(m_iBtnDebugGreen,getColorGrey())
+    setButtonColor(m_iBtnDebugBlue,getColorGrey())
+    setButtonColor(m_iBtnDebugPurple,getColorGrey())
+    setButtonColor(m_iBtnDebugPink,getColorGrey())
+    setButtonColor(m_iBtnDebugWhite,getColorGrey())
+    setButtonColor(m_iBtnDebugRed,getColorGrey())
+    setButtonColor(m_iBtnDebugOrange,getColorGrey())
+    setButtonColor(m_iBtnDebugYellow,getColorGrey())
+    
+    if color == "green" then
+        setButtonColor(m_iBtnDebugGreen,getColorGreen())
+    end
+    if color == "blue" then
+        setButtonColor(m_iBtnDebugBlue,getColorBlue())
+    end
+    if color == "purple" then
+        setButtonColor(m_iBtnDebugPurple,getColorPurple()) 
+    end
+    if color == "pink" then
+        setButtonColor(m_iBtnDebugPink,getColorPink()) 
+    end
+    if color == "white" then
+        setButtonColor(m_iBtnDebugWhite,getColorWhite())
+    end
+    if color == "red" then
+        setButtonColor(m_iBtnDebugRed,getColorRed())
+    end
+    if color == "orange" then
+        setButtonColor(m_iBtnDebugOrange,getColorOrange())
+    end
+    if color == "yellow" then
+        setButtonColor(m_iBtnDebugYellow,getColorYellow())
+    end
+end
+
+function updateColorsForPlayersIn()
+    if m_bPlayersInOverride_Green then
+        setButtonColor(m_iBtnDebugGreen,getColorGreen())
+    else
+        setButtonColor(m_iBtnDebugGreen,getColorGrey())
+    end
+    if m_bPlayersInOverride_Blue then
+        setButtonColor(m_iBtnDebugBlue,getColorBlue())
+    else
+        setButtonColor(m_iBtnDebugBlue,getColorGrey())
+    end
+    if m_bPlayersInOverride_Purple then
+        setButtonColor(m_iBtnDebugPurple,getColorPurple())
+    else
+        setButtonColor(m_iBtnDebugPurple,getColorGrey())
+    end
+    if m_bPlayersInOverride_Pink then
+        setButtonColor(m_iBtnDebugPink,getColorPink())
+    else 
+        setButtonColor(m_iBtnDebugPink,getColorGrey())
+    end
+    if m_bPlayersInOverride_White then
+        setButtonColor(m_iBtnDebugWhite,getColorWhite())
+    else
+        setButtonColor(m_iBtnDebugWhite,getColorGrey())
+    end
+    if m_bPlayersInOverride_Red then
+        setButtonColor(m_iBtnDebugRed,getColorRed())
+    else
+        setButtonColor(m_iBtnDebugRed,getColorGrey())
+    end
+    if m_bPlayersInOverride_Orange then
+        setButtonColor(m_iBtnDebugOrange,getColorOrange())
+    else
+        setButtonColor(m_iBtnDebugOrange,getColorGrey())
+    end
+    if m_bPlayersInOverride_Yellow then
+        setButtonColor(m_iBtnDebugYellow,getColorYellow())
+    else
+        setButtonColor(m_iBtnDebugYellow,getColorGrey())
+	end
+end
+
+--
+--
+--  PLAYER CARDS
+--
+--
+function givePlayersStayLeave()
+    m_bWaitingForPlayerResponce = true
+    giveStayLeaveCardsToPlayers()
+end
+
+function giveStayLeaveCardsToPlayers()
+    if hideAllStayLeaveCards == nil then
+        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+    end
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        if m_tbPlayerInformation[v].areInRound then
+            if m_tbPlayerInformation[v].objCardStay ~= nil then
+                --Deal to player
+                m_tbPlayerInformation[v].objCardStay.deal(1,v)
+                m_tbPlayerInformation[v].objCardStayInZone = true
+                --Flip Face Up only leave card
+                flipCardFaceUp(m_tbPlayerInformation[v].objCardStay)
+                --Make visible / Interactable
+                m_tbPlayerInformation[v].objCardStay.setInvisibleTo()
+                m_tbPlayerInformation[v].objCardStay.interactable = true
+            end
+            if m_tbPlayerInformation[v].objCardLeave ~= nil then
+                --Deal to Player
+                m_tbPlayerInformation[v].objCardLeave.deal(1,v)
+                 m_tbPlayerInformation[v].objCardLeaveInZone = true
+                --Flip Face Down only leave card
+                flipCardFaceDown(m_tbPlayerInformation[v].objCardLeave)
+                --Make visible / Interactable
+                m_tbPlayerInformation[v].objCardLeave.setInvisibleTo()
+                m_tbPlayerInformation[v].objCardLeave.interactable = true
+            end
+        end
+    end
+end
+
+function onObjectLeaveScriptingZone(zone, obj)
+    --print(obj.getGUID())
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        if obj.guid == m_tbPlayerInformation[v].objCardStay.guid then
+            m_tbPlayerInformation[v].objCardStayInZone = false
+            printToAll(v .. " stay left ")
+        end
+        if obj.guid == m_tbPlayerInformation[v].objCardLeave.guid then
+            m_tbPlayerInformation[v].objCardLeaveInZone = false
+            printToAll(v .. " leave left ")
+        end
+    end
+end
+
+function onObjectEnterScriptingZone(zone, obj)
+    --print(obj.getGUID())
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        if obj.guid == m_tbPlayerInformation[v].objCardStay.guid then
+            m_tbPlayerInformation[v].objCardStayInZone = true
+            printToAll(v .. " stay enter ")
+        end
+        if obj.guid == m_tbPlayerInformation[v].objCardLeave.guid then
+            m_tbPlayerInformation[v].objCardLeaveInZone = true
+            printToAll(v .. " leave enter ")
+        end
+    end
+end
+
+--
+--singlePlayer.objCardStay = nil
+--singlePlayer.objCardStayInZone = false
+--singlePlayer.objCardStayInDrop = false
+--
+
+function onObjectDrop(colorName, obj)
+     local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        if obj.guid == m_tbPlayerInformation[v].objCardStay.guid then
+            m_tbPlayerInformation[v].objCardStayInDrop = true
+            printToAll(v .. " stay drop ")
+        end
+        if obj.guid == m_tbPlayerInformation[v].objCardLeave.guid then
+            m_tbPlayerInformation[v].objCardLeaveInDrop = true
+            printToAll(v .. " leave drop ")
+        end
+    end
+end
+
+function onObjectPickUp(colorName, obj)
+     local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        if obj.guid == m_tbPlayerInformation[v].objCardStay.guid then
+            m_tbPlayerInformation[v].objCardStayInDrop = false
+            printToAll(v .. " stay pickup ")
+        end
+        if obj.guid == m_tbPlayerInformation[v].objCardLeave.guid then
+            m_tbPlayerInformation[v].objCardLeaveInDrop = false
+            printToAll(v .. " leave pickup ")
+        end
+    end
 end
