@@ -9,6 +9,10 @@
 --Next 8 Tags should be the over (tags 25-33)
 --      Default: 91a013 9492b7 b102ac ba9dc6 69d9c9 96c03a 4bb075 1d7a60
 
+-- rotations
+no_rotation = {x = 0, y = 0, z = 0}
+flip_y = {x = 0, y = 180, z = 0}
+flip_y_z = {x = 0, y = 180, z = 180}
 
 --Overall Vars
 m_objMainDeck = nil -- The Main Deck
@@ -165,6 +169,7 @@ function mainButton()
                 createPreRoundTimer()
                 return true
             end
+            hideLeaveCardsOfNotInPlayers()--HidesAnyLeftOverCards
             if dealCardInRound() >= 5 then
                 m_bRoundIsOn = false
                 m_iRoundNumber = m_iRoundNumber + 1
@@ -532,6 +537,7 @@ function flipCardFaceUp(_card, _isMainDeckCard)
     end
     if _card.is_face_down then  --Mean card is face down
         _card.flip()
+        --_card.setRotationSmooth(no_rotation,false)
     end
     return true
 end
@@ -545,6 +551,7 @@ function flipCardFaceDown(_card, _isMainDeckCard)
     end
     if _card.is_face_down == false then --Mean card is face up
         _card.flip()
+        --_card.setRotationSmooth(no_rotation,false)
     end
     return true
 end
@@ -1029,7 +1036,7 @@ function setupDebugTimer()
     Timer.create({
         identifier=timerID,
         function_name="findItemsWhereMainDeckShouldBe", function_owner=self,
-        repetitions=0, delay=1
+        repetitions=1, delay=1
     })
 end
 
@@ -1153,7 +1160,7 @@ function createPreRoundTimer()
     Timer.create({
         identifier=m_tmrPreRound,
         function_name="shuffleAndPressMainButton", function_owner=self,
-        repetitions=0, delay=2
+        repetitions=1, delay=2
     })
     setDeckButtonLabel("Waiting for card")
 end
@@ -1173,7 +1180,7 @@ function createArtifactTakeOutTimer()
     Timer.create({
         identifier=m_tmrPreRound,
         function_name="timerCallbackArtifact", function_owner=self,
-        repetitions=0, delay=2
+        repetitions=1, delay=2
     })
     setDeckButtonLabel("Waiting for card")
 end
@@ -1192,7 +1199,7 @@ function createArtifactShuffleTimer()
     Timer.create({
         identifier=m_tmrPreRound,
         function_name="timerCallbackShuffleArtifact", function_owner=self,
-        repetitions=0, delay=2
+        repetitions=1, delay=2
     })
     setDeckButtonLabel("Waiting for deck")
 end
@@ -1423,6 +1430,12 @@ function getGemAmountFromDesc(cardDesc)
         end
     end
     return 0
+end
+
+function getGemAmountSplit(gemAmount, splitBetween)
+    local playersIn = getNumberOfPlayersInRound()
+    local timesIn = math.floor(gemAmount / playersIn,0)
+    return timesIn
 end
 
 function getGemAmountPerPerson(gemAmount)
@@ -1718,6 +1731,17 @@ function storeDestroyAllGems()
     end
     m_iNumberOfGemsInTable = 0
     return true
+end
+
+function storeNumberOfGems()
+    local number = 0
+    --for i = 1,m_iNumberOfGemsInTable,1 do
+    for i, v in ipairs(m_tbGemsOnCards) do
+        if v != nil then
+            number = number + 1
+        end
+    end
+    return number
 end
 
 --
@@ -2786,6 +2810,7 @@ end
 function givePlayersStayLeave()
     m_bWaitingForPlayerResponce = true
     giveStayLeaveCardsToPlayers()
+    TIMER_startPlayerCardTimer()
 end
 
 function giveStayLeaveCardsToPlayers()
@@ -2799,6 +2824,8 @@ function giveStayLeaveCardsToPlayers()
                 --Deal to player
                 m_tbPlayerInformation[v].objCardStay.deal(1,v)
                 m_tbPlayerInformation[v].objCardStayInZone = true
+                m_tbPlayerInformation[v].objCardStayInDrop = true
+                
                 --Flip Face Up only leave card
                 flipCardFaceUp(m_tbPlayerInformation[v].objCardStay)
                 --Make visible / Interactable
@@ -2809,6 +2836,7 @@ function giveStayLeaveCardsToPlayers()
                 --Deal to Player
                 m_tbPlayerInformation[v].objCardLeave.deal(1,v)
                  m_tbPlayerInformation[v].objCardLeaveInZone = true
+                 m_tbPlayerInformation[v].objCardLeaveInDrop = true
                 --Flip Face Down only leave card
                 flipCardFaceDown(m_tbPlayerInformation[v].objCardLeave)
                 --Make visible / Interactable
@@ -2819,16 +2847,229 @@ function giveStayLeaveCardsToPlayers()
     end
 end
 
+function areAllCardsOut()
+    if hideAllStayLeaveCards == nil then
+        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+        return false
+    end
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        if m_tbPlayerInformation[v].areInRound then
+            --Players in Round
+            if m_tbPlayerInformation[v].objCardStay ~= nil and m_tbPlayerInformation[v].objCardLeave ~= nil then
+                --Have Cards
+                if m_tbPlayerInformation[v].objCardStayInZone and m_tbPlayerInformation[v].objCardLeaveInZone then
+                    --printToAll(v .. " in the zone")
+                    --Both Cards are in the zone
+                    return false
+                end
+                if m_tbPlayerInformation[v].objCardStayInDrop == false or  m_tbPlayerInformation[v].objCardLeaveInDrop == false then
+                    --A card is in the hand
+                    --printToAll(v .. " in the hands")
+                    return false
+                end
+            else
+                printToAll("areAllCardsOut: Couldn't find" .. v .. " cards. Probably an issue")
+            end
+        end
+    end
+    return true
+end
+
+function canFlipCardsOver()
+    if hideAllStayLeaveCards == nil then
+        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+        return false
+    end
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        if m_tbPlayerInformation[v].areInRound then
+            --Players in Round
+            if m_tbPlayerInformation[v].objCardStayInZone == false and m_tbPlayerInformation[v].objCardLeaveInZone == false then
+                m_sWarningIsOn = v
+                return false
+            end
+            if m_tbPlayerInformation[v].objCardStayInZone then
+                printToAll(v .. " stay is in the zone")
+            end
+            if m_tbPlayerInformation[v].objCardLeaveInZone then
+                printToAll(v .. " leave is in the zone")
+            end
+        end
+    end
+    return true
+end
+
+function flipOverAllStayLeave()
+    if hideAllStayLeaveCards == nil then
+        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+        return false
+    end
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    printToAll("Who's in and out?")
+    for i, v in ipairs(colorsInOrder) do
+        if m_tbPlayerInformation[v].areInRound then
+            printToAll(v)
+            --Players in Round
+            if m_tbPlayerInformation[v].objCardStayInZone == false then
+                flipCardFaceUp(m_tbPlayerInformation[v].objCardStay)
+                printToAll(v .. " is staying")
+            end
+            if m_tbPlayerInformation[v].objCardLeaveInZone == false then
+                flipCardFaceUp(m_tbPlayerInformation[v].objCardLeave)
+                playersLeavingAddPlayers(v)
+                m_tbPlayerInformation[v].areInRound = false
+                printToAll(v .. " is Leaving")
+            end
+        end
+    end
+    return true
+end
+
+function hideLeaveCardsOfNotInPlayers()
+    if hideAllStayLeaveCards == nil then
+        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+        return false
+    end
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        if m_tbPlayerInformation[v].areInRound == false then
+            m_tbPlayerInformation[v].objCardLeave.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey"})
+                m_tbPlayerInformation[v].objCardLeave.interactable = false
+            m_tbPlayerInformation[v].objCardStay.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey"})
+            m_tbPlayerInformation[v].objCardStay.interactable = false
+        end
+    end
+    return true
+end
+
+m_tbPlayerForRewards = {}
+m_iPlayerForRewardsCount = 0
+
+function playersLeavingAddPlayers(color)
+    m_iPlayerForRewardsCount = m_iPlayerForRewardsCount + 1
+    m_tbPlayerForRewards[m_iPlayerForRewardsCount] = color
+end
+
+function playersLeavingActionPlayers()
+    if m_iPlayerForRewardsCount <= 0 then
+        return false
+    end
+    local lowerSend = -1
+    local upperSend = 1
+    local vec = Vector(0,0,0)
+    
+    local gemsPerPlayer = getGemAmountSplit(storeNumberOfGems(), m_iPlayerForRewardsCount)--Gems, Players
+    if gemsPerPlayer > 0 then
+        for i, v in ipairs(m_tbPlayerForRewards) do
+            if m_tbPlayerInformation[v].objOutsideTenCounter ~= nil then
+            vec = m_tbPlayerInformation[v].objOutsideTenCounter.getPosition()
+            --vec[1] = m_tbPlayerInformation[v].objOutsideTenCounter.getPosition()[1]
+            --vec[2] = m_tbPlayerInformation[v].objOutsideTenCounter.getPosition()[2]
+            --vec[3] = m_tbPlayerInformation[v].objOutsideTenCounter.getPosition()[3]
+            printToAll("Giving Stage 1: ".. v.. ": " .. gemsPerPlayer)
+            playersLeavingActionPlayers_givingGems(gemsPerPlayer, vec,lowerSend,upperSend)
+            else
+                printToAll(v .. " doesn't have a tent location")
+            end
+        end
+    end
+    m_tbPlayerForRewards = {}
+    m_iPlayerForRewardsCount = 0
+end
+
+function playersLeavingActionPlayers_givingGems(gemsToGive, vec, _lower, _upper)
+    local tbReuse = {}
+    for j = gemsToGive,1,-1 do
+        printToAll("Giving Stage 2: " .. j)
+        tbReuse = storeGetNextAvailableGem()
+        if tbReuse[2] == false then
+            printToAll("Ran out of gems to give?")
+        end
+        vec = getRandomVectorFromLocation(vec,_lower,_upper)
+        tbReuse[2].setPositionSmooth(vec,false,false)
+        storeRemoveGem(tbReuse[1] + 1)
+        tbReuse = {}
+        
+    end
+end
+--
+--
+--  PLAYER CARDS TIMERS
+--
+--
+
+m_tmrPlayerCard = nil --Stores the ID for the timer
+m_tmrPlayerCardWarning = nil --Stores the ID for the warning timer
+m_sWarningIsOn = "" --Stores the ID for the warning timer
+
+function TIMER_startPlayerCardTimer()
+    m_tmrPlayerCard = self.getGUID()..math.random(9999999999999)
+    --Start timer which repeats forever, running countItems() every second
+    --This is repeating... stop it from doing that
+    Timer.create({
+        identifier=m_tmrPlayerCard,
+        function_name="TIMERCALLBACK_PlayerCardTimer", function_owner=self,
+        repetitions=0, delay=1
+    })
+    TIMER_startPlayerCardTimerWarning()
+end
+
+function TIMERCALLBACK_PlayerCardTimer()
+    --printToAll("Attempt")
+    if areAllCardsOut() then
+        printToAll("First step")
+        if canFlipCardsOver() then
+            printToAll("S'all good")
+            if flipOverAllStayLeave() then
+                playersLeavingActionPlayers()
+                Timer.destroy(m_tmrPlayerCard)
+                Timer.destroy(m_tmrPlayerCardWarning)
+                m_tmrPlayerCard = nil
+                m_tmrPlayerCardWarning = nil
+                m_sWarningIsOn = ""
+                m_bWaitingForPlayerResponce = false
+                --THIS IS THE END OF A CHOOSEN ROUND --
+            end
+        end
+    end
+end
+
+function TIMER_startPlayerCardTimerWarning()
+    m_tmrPlayerCardWarning = self.getGUID()..math.random(9999999999999)
+    --Start timer which repeats forever, running countItems() every second
+    --This is repeating... stop it from doing that
+    Timer.create({
+        identifier=m_tmrPlayerCardWarning,
+        function_name="TIMERCALLBACK_PlayerCardTimerWarning", function_owner=self,
+        repetitions=0, delay=3
+    })
+end
+
+function TIMERCALLBACK_PlayerCardTimerWarning()
+    if m_sWarningIsOn ~= "" then
+        printToAll("Woooow... " .. m_sWarningIsOn .. " is eger. Try choosing one card")
+    end
+end
+
+--
+--
+--  OBJECT CALLS
+--
+--
+
 function onObjectLeaveScriptingZone(zone, obj)
     --print(obj.getGUID())
     local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
     for i, v in ipairs(colorsInOrder) do
         if obj.guid == m_tbPlayerInformation[v].objCardStay.guid then
             m_tbPlayerInformation[v].objCardStayInZone = false
+            flipCardFaceDown(m_tbPlayerInformation[v].objCardStay)
             printToAll(v .. " stay left ")
         end
         if obj.guid == m_tbPlayerInformation[v].objCardLeave.guid then
             m_tbPlayerInformation[v].objCardLeaveInZone = false
+            flipCardFaceDown(m_tbPlayerInformation[v].objCardLeave)
             printToAll(v .. " leave left ")
         end
     end
@@ -2860,11 +3101,11 @@ function onObjectDrop(colorName, obj)
     for i, v in ipairs(colorsInOrder) do
         if obj.guid == m_tbPlayerInformation[v].objCardStay.guid then
             m_tbPlayerInformation[v].objCardStayInDrop = true
-            printToAll(v .. " stay drop ")
+            --printToAll(v .. " stay drop ")
         end
         if obj.guid == m_tbPlayerInformation[v].objCardLeave.guid then
             m_tbPlayerInformation[v].objCardLeaveInDrop = true
-            printToAll(v .. " leave drop ")
+            --printToAll(v .. " leave drop ")
         end
     end
 end
@@ -2874,11 +3115,17 @@ function onObjectPickUp(colorName, obj)
     for i, v in ipairs(colorsInOrder) do
         if obj.guid == m_tbPlayerInformation[v].objCardStay.guid then
             m_tbPlayerInformation[v].objCardStayInDrop = false
-            printToAll(v .. " stay pickup ")
+            if m_tbPlayerInformation[v].objCardStayInZone then
+                flipCardFaceDown(m_tbPlayerInformation[v].objCardStay)
+            end
+            --printToAll(v .. " stay pickup ")
         end
         if obj.guid == m_tbPlayerInformation[v].objCardLeave.guid then
             m_tbPlayerInformation[v].objCardLeaveInDrop = false
-            printToAll(v .. " leave pickup ")
+            if m_tbPlayerInformation[v].objCardLeaveInZone then
+                flipCardFaceDown(m_tbPlayerInformation[v].objCardLeave)
+            end
+            --printToAll(v .. " leave pickup ")
         end
     end
 end
