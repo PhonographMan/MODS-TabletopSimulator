@@ -39,6 +39,7 @@ m_iNumberOfArtifactsThisGame = 0
 --Round Vars
 m_bRoundIsOn = false
 m_bShuffleBeforeDeal = false
+m_bMoveOnFromStayLeave = false
 m_iCurrentPath = 1
 m_iNumberOfPlayersIn = 0
 m_iNumberOfHazzards_Spider = 0
@@ -161,7 +162,11 @@ function mainButton()
         m_iBetweenRoundSetup = m_iBetweenRoundSetup + 1
     elseif m_bRoundIsOn and m_bWaitingForPlayerResponce == false then
         if m_bReadyForNextCard == true then
-            if m_bShuffleBeforeDeal then
+            if m_bMoveOnFromStayLeave then
+                if playersLeavingActionPlayers_OnDeal() == false then
+                    return false
+                end
+            elseif m_bShuffleBeforeDeal then
                 updateInPlayers()
                 artifactDeckShuffle()
                 dealArtifactToMainDeck()
@@ -171,17 +176,8 @@ function mainButton()
             end
             hideLeaveCardsOfNotInPlayers()--HidesAnyLeftOverCards
             if dealCardInRound() >= 5 then
-                m_bRoundIsOn = false
-                m_iRoundNumber = m_iRoundNumber + 1
-                if m_iRoundNumber >= 6 then
-                    setDeckButtonLabel("Setup next game")
-                    m_iRoundNumber = 0
-                else
-                    m_bAreInOverflow = false
-                    setDeckButtonLabel("Start new round")
-                end
-                m_iNumberOfGemsInTable = 0
-                m_iMaxGemsInFrontOfPlayer = 0
+                moveToNextRound() --Sets up next round.
+                --Above is only really called here or if all players leave.
             else
                 setDeckButtonLabel("Deal")
                 if m_iMaxGemsInFrontOfPlayer > 0 or m_iNumberOfGemsInTable >  0 then
@@ -204,6 +200,20 @@ function mainButton()
             setDeckButtonLabel("Deal")
         end
     end
+end
+
+function moveToNextRound()
+    m_bRoundIsOn = false
+    m_iRoundNumber = m_iRoundNumber + 1
+    if m_iRoundNumber >= 6 then
+        setDeckButtonLabel("Setup next game")
+        m_iRoundNumber = 0
+    else
+        m_bAreInOverflow = false
+        setDeckButtonLabel("Start new round")
+    end
+    m_iNumberOfGemsInTable = 0
+    m_iMaxGemsInFrontOfPlayer = 0
 end
 
 function CALLBACKcardhitpath(card)
@@ -1277,7 +1287,7 @@ function findPlayerCardsInTable(destTable,guidsFromPath)
 end
 
 function hideAllStayLeaveCards()
-    if hideAllStayLeaveCards == nil then
+    if m_tbPlayerInformation == nil then
         printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
     end
     local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
@@ -1294,8 +1304,8 @@ function hideAllStayLeaveCards()
 end
 
 function showStayLeaveCardsForInPlayers()
-    if hideAllStayLeaveCards == nil then
-        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+    if m_tbPlayerInformation == nil then
+        printToAll("showStayLeaveCardsForInPlayers: PlayerInformation is blank")
     end
     local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
     for i, v in ipairs(colorsInOrder) do
@@ -1315,8 +1325,8 @@ function showStayLeaveCardsForInPlayers()
 end
 
 function hideAllLocationsForPlayers()
-    if hideAllStayLeaveCards == nil then
-        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+    if m_tbPlayerInformation == nil then
+        printToAll("hideAllLocationsForPlayers: PlayerInformation is blank")
     end
     local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
     for i, v in ipairs(colorsInOrder) do
@@ -1328,8 +1338,8 @@ function hideAllLocationsForPlayers()
 end
 
 function showAllLocationsForPlayers()
-    if hideAllStayLeaveCards == nil then
-        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+    if m_tbPlayerInformation == nil then
+        printToAll("showAllLocationsForPlayers: PlayerInformation is blank")
     end
     local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
     for i, v in ipairs(colorsInOrder) do
@@ -1433,7 +1443,7 @@ function getGemAmountFromDesc(cardDesc)
 end
 
 function getGemAmountSplit(gemAmount, splitBetween)
-    local playersIn = getNumberOfPlayersInRound()
+    local playersIn = splitBetween
     local timesIn = math.floor(gemAmount / playersIn,0)
     return timesIn
 end
@@ -1684,19 +1694,27 @@ function copyVectorToVector(original,copy)
     return true
 end
 
+--
+--
+--  STORE GEMS ON CARDS
+--
+--
+
 function storeAddGem(gemObj)
     m_iNumberOfGemsInTable = m_iNumberOfGemsInTable + 1
-    --printToAll("storeAddGem: "..m_iNumberOfGemsInTable)
+    printToAll("storeAddGem: "..m_iNumberOfGemsInTable)
     m_tbGemsOnCards[m_iNumberOfGemsInTable] = gemObj
     return true
 end
 
 function storeRemoveGem(index)
+    printToAll("storeRemoveGem: "..index)
     m_tbGemsOnCards[index] = nil
     return true
 end
 
 function storeEmptyGems()
+    printToAll("storeEmptyGems")
     m_tbGemsOnCards = {}
     m_iNumberOfGemsInTable = 0
     return true
@@ -1713,7 +1731,7 @@ end
 
 function storeGetNextAvailableGem()
     for i, v in ipairs(m_tbGemsOnCards) do
-        if v != nil then
+        if v ~= nil then
             return {i,v}
         end
     end
@@ -1724,7 +1742,7 @@ function storeDestroyAllGems()
     printToAll("storeDestroyAllGems: "..m_iNumberOfGemsInTable)
     --for i = 1,m_iNumberOfGemsInTable,1 do
     for i, v in ipairs(m_tbGemsOnCards) do
-        if v != nil then
+        if v ~= nil then
             printToAll(i)
             storeDestroyGem(i)
         end
@@ -1737,7 +1755,7 @@ function storeNumberOfGems()
     local number = 0
     --for i = 1,m_iNumberOfGemsInTable,1 do
     for i, v in ipairs(m_tbGemsOnCards) do
-        if v != nil then
+        if v ~= nil then
             number = number + 1
         end
     end
@@ -1817,28 +1835,28 @@ function setButtonColor(buttonIndex, backgroundColor, fontColor, hoverColor, pre
     local button_parameters = {}
     button_parameters.index = buttonIndex
     
-    if backgroundColor != nil then
+    if backgroundColor ~= nil then
         button_parameters.color = {}
         button_parameters.color[1] = backgroundColor[1]
         button_parameters.color[2] = backgroundColor[2]
         button_parameters.color[3] = backgroundColor[3]
         button_parameters.color[4] = backgroundColor[4]
     end
-    if fontColor != nil then
+    if fontColor ~= nil then
         button_parameters.font_color = {}
         button_parameters.font_color[1] = fontColor[1]
         button_parameters.font_color[2] = fontColor[2]
         button_parameters.font_color[3] = fontColor[3]
         button_parameters.font_color[4] = fontColor[4]
     end
-    if hoverColor != nil then
+    if hoverColor ~= nil then
         button_parameters.hover_color = {}
         button_parameters.hover_color[1] = hoverColor[1]
         button_parameters.hover_color[2] = hoverColor[2]
         button_parameters.hover_color[3] = hoverColor[3]
         button_parameters.hover_color[4] = hoverColor[4]
     end
-    if pressColor != nil then
+    if pressColor ~= nil then
         button_parameters.press_color = {}
         button_parameters.press_color[1] = pressColor[1]
         button_parameters.press_color[2] = pressColor[2]
@@ -2811,11 +2829,12 @@ function givePlayersStayLeave()
     m_bWaitingForPlayerResponce = true
     giveStayLeaveCardsToPlayers()
     TIMER_startPlayerCardTimer()
+    setDeckButtonLabel("Danger!")
 end
 
 function giveStayLeaveCardsToPlayers()
-    if hideAllStayLeaveCards == nil then
-        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+    if m_tbPlayerInformation == nil then
+        printToAll("giveStayLeaveCardsToPlayers: PlayerInformation is blank")
     end
     local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
     for i, v in ipairs(colorsInOrder) do
@@ -2848,8 +2867,8 @@ function giveStayLeaveCardsToPlayers()
 end
 
 function areAllCardsOut()
-    if hideAllStayLeaveCards == nil then
-        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+    if m_tbPlayerInformation == nil then
+        printToAll("areAllCardsOut: PlayerInformation is blank")
         return false
     end
     local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
@@ -2877,8 +2896,8 @@ function areAllCardsOut()
 end
 
 function canFlipCardsOver()
-    if hideAllStayLeaveCards == nil then
-        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+    if m_tbPlayerInformation == nil then
+        printToAll("canFlipCardsOver: PlayerInformation is blank")
         return false
     end
     local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
@@ -2889,27 +2908,22 @@ function canFlipCardsOver()
                 m_sWarningIsOn = v
                 return false
             end
-            if m_tbPlayerInformation[v].objCardStayInZone then
-                printToAll(v .. " stay is in the zone")
-            end
-            if m_tbPlayerInformation[v].objCardLeaveInZone then
-                printToAll(v .. " leave is in the zone")
-            end
+            
         end
     end
     return true
 end
 
 function flipOverAllStayLeave()
-    if hideAllStayLeaveCards == nil then
-        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+    if m_tbPlayerInformation == nil then
+        printToAll("flipOverAllStayLeave: PlayerInformation is blank")
         return false
     end
     local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
     printToAll("Who's in and out?")
     for i, v in ipairs(colorsInOrder) do
         if m_tbPlayerInformation[v].areInRound then
-            printToAll(v)
+            --printToAll(v)
             --Players in Round
             if m_tbPlayerInformation[v].objCardStayInZone == false then
                 flipCardFaceUp(m_tbPlayerInformation[v].objCardStay)
@@ -2918,7 +2932,6 @@ function flipOverAllStayLeave()
             if m_tbPlayerInformation[v].objCardLeaveInZone == false then
                 flipCardFaceUp(m_tbPlayerInformation[v].objCardLeave)
                 playersLeavingAddPlayers(v)
-                m_tbPlayerInformation[v].areInRound = false
                 printToAll(v .. " is Leaving")
             end
         end
@@ -2927,8 +2940,8 @@ function flipOverAllStayLeave()
 end
 
 function hideLeaveCardsOfNotInPlayers()
-    if hideAllStayLeaveCards == nil then
-        printToAll("hideAllStayLeaveCards: PlayerInformation is blank")
+    if m_tbPlayerInformation == nil then
+        printToAll("hideLeaveCardsOfNotInPlayers: PlayerInformation is blank")
         return false
     end
     local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
@@ -2960,13 +2973,11 @@ function playersLeavingActionPlayers()
     local vec = Vector(0,0,0)
     
     local gemsPerPlayer = getGemAmountSplit(storeNumberOfGems(), m_iPlayerForRewardsCount)--Gems, Players
+    printToAll("playersLeavingActionPlayers: Attempting to give gems: " .. gemsPerPlayer .. " store: " .. storeNumberOfGems() .. " m_iPlayerForRewardsCount: " .. m_iPlayerForRewardsCount) 
     if gemsPerPlayer > 0 then
         for i, v in ipairs(m_tbPlayerForRewards) do
             if m_tbPlayerInformation[v].objOutsideTenCounter ~= nil then
             vec = m_tbPlayerInformation[v].objOutsideTenCounter.getPosition()
-            --vec[1] = m_tbPlayerInformation[v].objOutsideTenCounter.getPosition()[1]
-            --vec[2] = m_tbPlayerInformation[v].objOutsideTenCounter.getPosition()[2]
-            --vec[3] = m_tbPlayerInformation[v].objOutsideTenCounter.getPosition()[3]
             printToAll("Giving Stage 1: ".. v.. ": " .. gemsPerPlayer)
             playersLeavingActionPlayers_givingGems(gemsPerPlayer, vec,lowerSend,upperSend)
             else
@@ -2974,8 +2985,25 @@ function playersLeavingActionPlayers()
             end
         end
     end
+end
+
+function playersLeavingActionPlayers_OnDeal()
+    for i, v in ipairs(m_tbPlayerForRewards) do
+        m_tbPlayerInformation[v].areInRound = false
+    end
+    m_bMoveOnFromStayLeave = false
+    
     m_tbPlayerForRewards = {}
     m_iPlayerForRewardsCount = 0
+    
+    if getNumberOfPlayersInRound() <= 0 then
+        moveToNextRound()
+        if m_iRoundNumber > 0 then --We're in the round then deal
+            mainButton()
+        end
+        return false
+    end
+    return true
 end
 
 function playersLeavingActionPlayers_givingGems(gemsToGive, vec, _lower, _upper)
@@ -2983,14 +3011,13 @@ function playersLeavingActionPlayers_givingGems(gemsToGive, vec, _lower, _upper)
     for j = gemsToGive,1,-1 do
         printToAll("Giving Stage 2: " .. j)
         tbReuse = storeGetNextAvailableGem()
-        if tbReuse[2] == false then
+        if tbReuse == false then
             printToAll("Ran out of gems to give?")
         end
         vec = getRandomVectorFromLocation(vec,_lower,_upper)
         tbReuse[2].setPositionSmooth(vec,false,false)
         storeRemoveGem(tbReuse[1] + 1)
         tbReuse = {}
-        
     end
 end
 --
@@ -3010,7 +3037,7 @@ function TIMER_startPlayerCardTimer()
     Timer.create({
         identifier=m_tmrPlayerCard,
         function_name="TIMERCALLBACK_PlayerCardTimer", function_owner=self,
-        repetitions=0, delay=1
+        repetitions=0, delay=3
     })
     TIMER_startPlayerCardTimerWarning()
 end
@@ -3018,17 +3045,21 @@ end
 function TIMERCALLBACK_PlayerCardTimer()
     --printToAll("Attempt")
     if areAllCardsOut() then
-        printToAll("First step")
+        --printToAll("First step")
         if canFlipCardsOver() then
-            printToAll("S'all good")
+            --printToAll("S'all good")
             if flipOverAllStayLeave() then
                 playersLeavingActionPlayers()
+                
                 Timer.destroy(m_tmrPlayerCard)
                 Timer.destroy(m_tmrPlayerCardWarning)
                 m_tmrPlayerCard = nil
                 m_tmrPlayerCardWarning = nil
                 m_sWarningIsOn = ""
                 m_bWaitingForPlayerResponce = false
+                
+                m_bMoveOnFromStayLeave = true
+                setDeckButtonLabel("Deal")
                 --THIS IS THE END OF A CHOOSEN ROUND --
             end
         end
