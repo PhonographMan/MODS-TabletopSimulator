@@ -8,6 +8,7 @@
 --      Default: 832b6f 4ffd93 9bf66e a9440a 8ecbee
 --Next 8 Tags should be the over (tags 25-33)
 --      Default: 91a013 9492b7 b102ac ba9dc6 69d9c9 96c03a 4bb075 1d7a60
+--The last tag is a scriptable area over just the cards: 713538
 
 -- rotations
 no_rotation = {x = 0, y = 0, z = 0}
@@ -19,6 +20,7 @@ m_objMainDeck = nil -- The Main Deck
 m_objArtifcatDeck= nil -- The Main Deck
 m_tbPlayerInformation = nil -- Information on the Players in play
 m_tbMoneyBags = nil -- Money Bags
+m_objCardArea = nil -- Area with the cards
 
 m_btnNumberOfButtons = 0
 m_iBtnDeal = -1 --Deal Button
@@ -122,6 +124,8 @@ function onLoad()
     --setDeckHidden(false)
     showHideOverflowPaths(false)
     setDeckInteractable(false)
+    
+    gemsOnCards_setupArea()
     --obj.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Grey"})
     
     local obj
@@ -294,8 +298,7 @@ function dealCardInRound()
             m_sRoundOverDueToHazzard = roundHazzardSpecificCheck(card.getDescription(), true)
             local hazzardEnder = roundHazzardUpdate()
             if hazzardEnder ~= "" then
-                storeDestroyAllGems()
-                storeEmptyGems()
+                gemsOnCards_destroyAll()
                 markDoubleHazzards(m_sRoundOverDueToHazzard)
                 printToAll("Two " .. hazzardEnder .. " cards")
                 m_bRoundOverDueToHazzards = true
@@ -326,8 +329,7 @@ function dealCardInRound()
         printToAll("Ran out of paths... welcome to the overflow!")
         return 0
     elseif m_iCurrentPath > 33 then
-        storeDestroyAllGems()
-        storeEmptyGems()
+        gemsOnCards_destroyAll()
         printToAll("Got to the end of the temple")
         return 6
     end
@@ -1451,6 +1453,9 @@ end
 
 function getGemAmountSplit(gemAmount, splitBetween)
     local playersIn = splitBetween
+    if playersIn == 0 then
+        return 0
+    end
     local timesIn = math.floor(gemAmount / playersIn,0)
     return timesIn
 end
@@ -1637,11 +1642,6 @@ function takeObjectsAndMoveThemSlowly_actuallyDoTheMoving(dest, bag, onCards, _l
     local objReuse = bag.takeObject()
     local vec = getRandomVectorFromLocation(dest,_lower,_upper)
     objReuse.setPositionSmooth(vec,false,false)
-    if onCards then
-        storeAddGem(objReuse)
-        --storeAddGem_guid(objReuse.guid)
-    end
-    --printToAll("Giving: " .. qty)
 end
 
 function getRandomVectorFromLocation(vec,_lower,_upper)
@@ -1715,113 +1715,67 @@ end
 --
 --
 
-function storeAddGem(gemObj)
-    m_iNumberOfGemsInTable = m_iNumberOfGemsInTable + 1
-    printToAll("storeAddGem: "..m_iNumberOfGemsInTable)
-    if gemObj == nil or gemObj == false then
-        printToAll("Gem OBJECT is nil")
+function gemsOnCards_setupArea()
+    m_objCardArea = getObjectFromGUID(m_tbGUIDinDescription[33])
+    if m_objCardArea == nil then
+        printToAll("Could not find card scriptable zone")
+    end
+end
+
+function gemsOnCards_count()
+    if m_objCardArea == nil then
+        printToAll("gemsOnCards_count: Zone not set.")
         return false
     end
-    m_tbGemsOnCards[m_iNumberOfGemsInTable] = gemObj
-    --local _guid = gemObj.getGUID()
-    --if _guid == nil or _guid == false then
-    --    printToAll("Gem OBJECT guid is nil")
-    --    return false
-    --else
-    --    printToAll(m_iNumberOfGemsInTable .. ": " .. _guid)
-    --end
-    --m_tbGemsOnCards[m_iNumberOfGemsInTable] = _guid
-    return true
-end
-
-function storeAddGem_guid(l_gemObj)
-    m_iNumberOfGemsInTable = m_iNumberOfGemsInTable + 1
-    printToAll("storeAddGem_guid: "..m_iNumberOfGemsInTable)
-    printToAll(m_iNumberOfGemsInTable .. ": " .. l_gemObj)
-    m_tbGemsOnCards[m_iNumberOfGemsInTable] = l_gemObj
-    return true
-end
-
-function storeRemoveGem(index)
-    printToAll("storeRemoveGem: "..index)
-    storeAddUsedGem(index)
-    --m_tbGemsOnCards[index] = false
-    return true
-end
-
-function storeEmptyGems()
-    printToAll("==========storeEmptyGems")
-    m_tbGemsOnCards = {}
-    m_iNumberOfGemsInTable = 0
-    m_tbGemsOnCardsNumbersUsed = {}
-    return true
-end
-
-function storeDestroyGem(index)
-    if m_tbGemsOnCards[index] == nil or m_tbGemsOnCards[index] == false then
-        return false
-    end
-    printToAll("==========storeDestroyGem: "..index)
-    m_tbGemsOnCards[index].destruct()
-    --m_tbGemsOnCards[index] = false
-    storeAddUsedGem(index)
-    return true
-end
-
-function storeGetNextAvailableGem()
-    --for i = 1,m_iNumberOfGemsInTable,1 do
-    for i, v in ipairs(m_tbGemsOnCards) do
-        if v == nil or v == false then
-        elseif storeIsUsedGem(i) then -- True means it is used
-        else
-            return {i,v}
-        end
-    end
-    return {false,false}
-end
-
-function storeDestroyAllGems()
-    printToAll("storeDestroyAllGems: "..m_iNumberOfGemsInTable)
-    --for i = 1,m_iNumberOfGemsInTable,1 do
-    for i, v in ipairs(m_tbGemsOnCards) do
-        if v ~= nil and v ~= false then
-            printToAll(i)
-            storeDestroyGem(i)
-        end
-    end
-    m_iNumberOfGemsInTable = 0
-    m_tbGemsOnCardsNumbersUsed = {}
-    return true
-end
-
-function storeNumberOfGems()
     local number = 0
-    --for i = 1,m_iNumberOfGemsInTable,1 do
-    for i, v in ipairs(m_tbGemsOnCards) do
-        if storeIsUsedGem(i) then -- True means it is used
-        elseif v ~= nil and v ~= false then
-            number = number + 1
-            printToAll("i : ".. v.guid)
+    for i, v in ipairs(m_objCardArea.getObjects()) do
+        local desc = v.getDescription()
+        local tags = getTags(desc,"")
+        if tags ~= false then
+            if gemsOnCards_isGem(tags) then
+                number = number + 1
+            end
         end
     end
     return number
 end
 
-function storeIsUsedGem(index) --means is it used
-    for i, v in ipairs(m_tbGemsOnCardsNumbersUsed) do
-        if v == index then
+function gemsOnCards_getAll()
+    if m_objCardArea == nil then
+        printToAll("gemsOnCards_count: Zone not set.")
+        return false
+    end
+    local output = {}
+    for i, v in ipairs(m_objCardArea.getObjects()) do
+        local desc = v.getDescription()
+        local tags = getTags(desc,"")
+        if tags ~= false then
+            if gemsOnCards_isGem(tags) then
+                table.insert(output,v)
+            end
+        end
+    end
+    return output
+end
+
+function gemsOnCards_destroyAll()
+    local allGems = gemsOnCards_getAll()
+    if gemsOnCards_getAll() == false then
+        return false
+    end
+    for i, v in ipairs(allGems) do
+        v.destroy()
+    end
+    return true
+end
+
+function gemsOnCards_isGem(tags)
+    for i, v in ipairs(tags) do
+        if v == "1" then
             return true
         end
     end
     return false
-end
-
-function storeAddUsedGem(index)
-    table.insert(m_tbGemsOnCardsNumbersUsed,index)
-    printToAll("storeAddUsedGem")
-    for i, v in ipairs(m_tbGemsOnCardsNumbersUsed) do
-        printToAll("i: " .. i .. " ["..v.."]")
-    end
 end
 
 --
@@ -3019,25 +2973,37 @@ function hideLeaveCardsOfNotInPlayers()
 end
 
 m_tbPlayerForRewards = {}
-m_iPlayerForRewardsCount = 0
+m_tbCurrentGems = {}
+m_tbCurrentGems_current = 0
 
 function playersLeavingAddPlayers(color)
-    m_iPlayerForRewardsCount = m_iPlayerForRewardsCount + 1
-    m_tbPlayerForRewards[m_iPlayerForRewardsCount] = color
+    table.insert(m_tbPlayerForRewards,color)
+end
+
+function playersLeavingAddPlayers_count()
+    local num = 0
+    for i, v in ipairs(m_tbPlayerForRewards) do
+        num = num + 1
+    end
+    return num
 end
 
 function playersLeavingActionPlayers()
-    if m_iPlayerForRewardsCount <= 0 then
+    if playersLeavingAddPlayers_count() <= 0 then
         return false
     end
     local lowerSend = -1
     local upperSend = 1
     local vec = Vector(0,0,0)
     
-    local numberOfGemsOnTable = storeNumberOfGems()
-    local gemsPerPlayer = getGemAmountSplit(numberOfGemsOnTable, m_iPlayerForRewardsCount)--Gems, Players
-    printToAll("playersLeavingActionPlayers: Attempting to give gems: " .. gemsPerPlayer .. " numberOfGemsOnTable: " .. numberOfGemsOnTable .. " Players to give to: " .. m_iPlayerForRewardsCount) 
+    
+    local numberOfGemsOnTable = gemsOnCards_count()
+    local numberOfPlayers = playersLeavingAddPlayers_count()
+    local gemsPerPlayer = getGemAmountSplit(numberOfGemsOnTable, numberOfPlayers)--Gems, Players
+    printToAll("playersLeavingActionPlayers: Attempting to give gems: " .. gemsPerPlayer .. " numberOfGemsOnTable: " .. numberOfGemsOnTable .. " Players to give to: " .. numberOfPlayers) 
     if gemsPerPlayer > 0 then
+        m_tbCurrentGems_current = 1
+        m_tbCurrentGems = gemsOnCards_getAll()
         for i, v in ipairs(m_tbPlayerForRewards) do
             if m_tbPlayerInformation[v].objOutsideTenCounter ~= nil then
             vec = m_tbPlayerInformation[v].objOutsideTenCounter.getPosition()
@@ -3047,6 +3013,7 @@ function playersLeavingActionPlayers()
                 printToAll(v .. " doesn't have a tent location")
             end
         end
+        m_tbCurrentGems = {}
     end
 end
 
@@ -3057,7 +3024,6 @@ function playersLeavingActionPlayers_OnDeal()
     m_bMoveOnFromStayLeave = false
     
     m_tbPlayerForRewards = {}
-    m_iPlayerForRewardsCount = 0
     
     if getNumberOfPlayersInRound() <= 0 then
         moveToNextRound()
@@ -3077,18 +3043,19 @@ function playersLeavingActionPlayers_givingGems(gemsToGive, vec, _lower, _upper)
 end
 
 function playersLeavingActionPlayers_givingGems_inner(vec,_lower,_upper)
-    local tbReuse = storeGetNextAvailableGem()
-    local obj
-    if tbReuse[1] == false then
-        printToAll("Ran out of gems to give?")
-    else
-        vec = getRandomVectorFromLocation(vec,_lower,_upper)
-        --obj = getObjectFromGUID(tbReuse[2])
-        obj = tbReuse[2]
-        obj.setPositionSmooth(vec,false,false)
-        printToAll("tbReuse[1]: " .. tbReuse[1])
-        storeRemoveGem(tbReuse[1])
-    end
+    --local tbReuse = storeGetNextAvailableGem()
+    --local obj
+    --if tbReuse[1] == false then
+    --    printToAll("Ran out of gems to give?")
+    --else
+    
+    local obj = m_tbCurrentGems[m_tbCurrentGems_current]
+    m_tbCurrentGems_current = m_tbCurrentGems_current + 1
+    
+    vec = getRandomVectorFromLocation(vec,_lower,_upper)
+    --obj = getObjectFromGUID(tbReuse[2])
+    obj.setPositionSmooth(vec,false,false)
+    --end
 end
 --
 --
