@@ -406,11 +406,6 @@ function resetAllPathColors(newColor)
                 return false
             end
             path.setColorTint( stringColorToRGB(newColor) )
-            --if i == 19 then
-            --    return true
-            --end
-        --else
-        --    return true
         end
     end
     return true
@@ -609,16 +604,6 @@ end
 
 function retractAllCardsToDeck()
     local vec = getPositionOfDeck()
-    --if m_bDeckIsActuallyASingleCard == false then
-    --    local deck = getDeckObject()
-    --    if deck == false then
-    --        return false
-    --    end
-    --    vec = deck.getPosition()
-    --    vec[2] = vec[2] + 1
-    --else
-    --    local vec = getPositionOfDeck()
-    --end
     for i, v in ipairs(m_tbDealtCards) do
         if v ~= nil and m_iDontFlipNumber_0 ~= i then
             v.setLock(false)
@@ -635,17 +620,6 @@ end
 
 function mergeHazardCardsToMainDeck()
     local vec = getPositionOfDeck()
-    --if m_bDeckIsActuallyASingleCard == false then
-    --    local deck = getDeckObject()
-    --    if deck == false then
-    --        return false
-    --    end
-    --    vec = deck.getPosition()
-    --    vec[2] = vec[2] + 1
-    --else
-    --    local vec = getPositionOfDeck()
-    --end
-
     for i, v in ipairs(m_tbHazzardsRemoved) do
         if v ~= nil then
             v.setLock(false)
@@ -1249,6 +1223,7 @@ function createDefaultSinglePlayerTable()
     singlePlayer.areInRound = false
     singlePlayer.areInGame = false
     singlePlayer.areInRoom = false
+    singlePlayer.objHiddenZone = nil
     singlePlayer.objCardStay = nil
     singlePlayer.objCardStayInZone = false
     singlePlayer.objCardStayInDrop = false
@@ -1292,6 +1267,12 @@ function findPlayerCardsInTable(destTable,guidsFromPath)
     destTable.objOutsideTenCounter = getObjectFromGUID(pathTags[4])
     if destTable.objOutsideTenCounter == nil then
         return false
+    end
+    destTable.objHiddenZone = getObjectFromGUID(pathTags[5])
+    if destTable.objHiddenZone == nil then
+        return false
+    else
+        printToAll("Found Hidden zone")
     end
 end
 
@@ -1507,19 +1488,7 @@ function giveGemsToSeatedPlayers(gemAmount)
     local _colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
     local vec
     local counterObj
-    --Would love to do the below code... it's real nice.
-    --But I keep getting "Tuple" errors.
-    --for i, v in ipairs(_colorsInOrder) do
-    --    if m_tbPlayerInformation[v].areInRound then
-    --        counterObj = m_tbPlayerInformation[v].objOutsideTenCounter
-    --        vec = counterObj.getPosition()
-    --        vec[2] = vec[2] + 0.5
-    --        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gems,vec,gemNumber)
-    --        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.gold,vec,goldNumber)
-    --        takeObjectsAndMoveThemSlowly(m_tbMoneyBags.obsidian,vec,obsidianNumber)
-    --    end
-    --end
-    --Instead:
+    
     if m_tbPlayerInformation[_colorsInOrder[1]].areInRound then
         counterObj = m_tbPlayerInformation[_colorsInOrder[1]].objOutsideTenCounter
         vec = counterObj.getPosition()
@@ -2893,7 +2862,8 @@ function areAllCardsOut()
             --Players in Round
             if m_tbPlayerInformation[v].objCardStay ~= nil and m_tbPlayerInformation[v].objCardLeave ~= nil then
                 --Have Cards
-                if m_tbPlayerInformation[v].objCardStayInZone and m_tbPlayerInformation[v].objCardLeaveInZone then
+                --if m_tbPlayerInformation[v].objCardStayInZone and m_tbPlayerInformation[v].objCardLeaveInZone then
+                if isCardOutOfHiddenZone(m_tbPlayerInformation[v].objCardStay.guid) == false and isCardOutOfHiddenZone(m_tbPlayerInformation[v].objCardLeave.guid) == false then
                     --printToAll(v .. " in the zone")
                     --Both Cards are in the zone
                     return false
@@ -2911,6 +2881,21 @@ function areAllCardsOut()
     return true
 end
 
+function isCardOutOfHiddenZone(guidOfCard) --true means it is out
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        if m_tbPlayerInformation[v].objHiddenZone == nil then
+            return true
+        end
+        for j, w in ipairs(m_tbPlayerInformation[v].objHiddenZone.getObjects()) do
+            if w.guid == guidOfCard then
+                return false
+            end
+        end
+    end
+    return true
+end
+
 function canFlipCardsOver()
     if m_tbPlayerInformation == nil then
         printToAll("canFlipCardsOver: PlayerInformation is blank")
@@ -2920,7 +2905,8 @@ function canFlipCardsOver()
     for i, v in ipairs(colorsInOrder) do
         if m_tbPlayerInformation[v].areInRound then
             --Players in Round
-            if m_tbPlayerInformation[v].objCardStayInZone == false and m_tbPlayerInformation[v].objCardLeaveInZone == false then
+            --if m_tbPlayerInformation[v].objCardStayInZone == false and m_tbPlayerInformation[v].objCardLeaveInZone == false then
+            if isCardOutOfHiddenZone(m_tbPlayerInformation[v].objCardStay.guid) and isCardOutOfHiddenZone(m_tbPlayerInformation[v].objCardLeave.guid) then
                 m_sWarningIsOn = v
                 return false
             end
@@ -3043,19 +3029,10 @@ function playersLeavingActionPlayers_givingGems(gemsToGive, vec, _lower, _upper)
 end
 
 function playersLeavingActionPlayers_givingGems_inner(vec,_lower,_upper)
-    --local tbReuse = storeGetNextAvailableGem()
-    --local obj
-    --if tbReuse[1] == false then
-    --    printToAll("Ran out of gems to give?")
-    --else
-    
     local obj = m_tbCurrentGems[m_tbCurrentGems_current]
     m_tbCurrentGems_current = m_tbCurrentGems_current + 1
-    
     vec = getRandomVectorFromLocation(vec,_lower,_upper)
-    --obj = getObjectFromGUID(tbReuse[2])
     obj.setPositionSmooth(vec,false,false)
-    --end
 end
 --
 --
