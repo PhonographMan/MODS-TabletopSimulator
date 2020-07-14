@@ -540,18 +540,32 @@ function toggleDeckVisibility()
     end
 end
 
+--
+--
+--  FLIPPING CARDS
+--
+--
+
 function flipCardFaceUp(_card, _isMainDeckCard)
     if _card == nil then
         return false
     end
     --Seems the wrong way around.
     --It's this way for the main deck.
-    if _isMainDeckCard then
-        return flipCardFaceDown(_card)
-    end
-    if _card.is_face_down then  --Mean card is face down
-        _card.flip()
+    --if _isMainDeckCard then
+    --    return flipCardFaceDown(_card)
+    --end
+    local rot = _card.getRotation()
+    local goalrotation = Vector(rot[1],rot[2],0)
+    
+    if rot[3] > 90 and rot[3] < 270 then --face down
+    --if _card.is_face_down then  --Mean card is face down
+        --_card.flip()
+        _card.setRotationSmooth(goalrotation,false,false)
+        printToAll("flipCardFaceUp:" .. _card.getName() .. ":" .. rot[3])
         --_card.setRotationSmooth(no_rotation,false)
+    else
+        printToAll("flipCardFaceUp: else" .. _card.getName() .. ":" .. rot[3])
     end
     return true
 end
@@ -560,12 +574,20 @@ function flipCardFaceDown(_card, _isMainDeckCard)
     if _card == nil then
         return false
     end
-    if _isMainDeckCard then
-        return flipCardFaceUp(_card)
-    end
-    if _card.is_face_down == false then --Mean card is face up
-        _card.flip()
+    --if _isMainDeckCard then
+    --    return flipCardFaceUp(_card)
+    --end
+    --if _card.is_face_down == false then --Mean card is face up
+    local rot = _card.getRotation()
+    local goalrotation = Vector(rot[1],rot[2],180)
+    
+    if rot[3] < 90 or rot[3] > 270 then --face up
+        --_card.flip()
+        _card.setRotationSmooth(goalrotation,false,false)
         --_card.setRotationSmooth(no_rotation,false)
+        printToAll("flipCardFaceDown:" .. _card.getName() .. ":" .. rot[3])
+    else
+        printToAll("flipCardFaceDown: else" .. _card.getName() .. ":" .. rot[3])
     end
     return true
 end
@@ -2925,16 +2947,12 @@ function flipOverAllStayLeave()
     --printToAll("Who's in and out?")
     for i, v in ipairs(colorsInOrder) do
         if m_tbPlayerInformation[v].areInRound then
-            --printToAll(v)
-            --Players in Round
-            if m_tbPlayerInformation[v].objCardStayInZone == false then
+            if isCardOutOfHiddenZone(m_tbPlayerInformation[v].objCardStay.guid) then
                 flipCardFaceUp(m_tbPlayerInformation[v].objCardStay)
-                --printToAll(v .. " is staying")
             end
-            if m_tbPlayerInformation[v].objCardLeaveInZone == false then
+            if isCardOutOfHiddenZone(m_tbPlayerInformation[v].objCardLeave.guid) then
                 flipCardFaceUp(m_tbPlayerInformation[v].objCardLeave)
                 playersLeavingAddPlayers(v)
-                --printToAll(v .. " is Leaving")
             end
         end
     end
@@ -3102,38 +3120,6 @@ end
 --  OBJECT CALLS
 --
 --
-
-function onObjectLeaveScriptingZone(zone, obj)
-    --print(obj.getGUID())
-    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
-    for i, v in ipairs(colorsInOrder) do
-        if obj.guid == m_tbPlayerInformation[v].objCardStay.guid then
-            m_tbPlayerInformation[v].objCardStayInZone = false
-            flipCardFaceDown(m_tbPlayerInformation[v].objCardStay)
-            --printToAll(v .. " stay left ")
-        end
-        if obj.guid == m_tbPlayerInformation[v].objCardLeave.guid then
-            m_tbPlayerInformation[v].objCardLeaveInZone = false
-            flipCardFaceDown(m_tbPlayerInformation[v].objCardLeave)
-            --printToAll(v .. " leave left ")
-        end
-    end
-end
-
-function onObjectEnterScriptingZone(zone, obj)
-    --print(obj.getGUID())
-    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
-    for i, v in ipairs(colorsInOrder) do
-        if obj.guid == m_tbPlayerInformation[v].objCardStay.guid then
-            m_tbPlayerInformation[v].objCardStayInZone = true
-            --printToAll(v .. " stay enter ")
-        end
-        if obj.guid == m_tbPlayerInformation[v].objCardLeave.guid then
-            m_tbPlayerInformation[v].objCardLeaveInZone = true
-            --printToAll(v .. " leave enter ")
-        end
-    end
-end
 
 --
 --singlePlayer.objCardStay = nil
