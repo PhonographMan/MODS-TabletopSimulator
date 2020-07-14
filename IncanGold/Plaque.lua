@@ -85,6 +85,7 @@ m_iBtnOverflowShowHideButton = -1 --Show Hide Overflow
 m_iBtnSmoothMovementButton = -1 --SmoothMovement
 m_iBtnDeckInteractable = -1 --SmoothMovement
 m_iBtnUtilityInteractable = -1 --Utility Button
+m_iBtnCardsInteract = -1 --Interact Cards
 
 m_iBtnPlayerDebugMoveButtons = -1 --Color debug option: Move player
 m_iBtnPlayerInDebugButtons = -1 --Color debug option: Players in
@@ -1247,12 +1248,11 @@ function createDefaultSinglePlayerTable()
     singlePlayer.areInRoom = false
     singlePlayer.objHiddenZone = nil
     singlePlayer.objCardStay = nil
-    singlePlayer.objCardStayInZone = false
     singlePlayer.objCardStayInDrop = false
     singlePlayer.objCardLeave = nil
-    singlePlayer.objCardLeaveInZone = false
     singlePlayer.objCardLeaveInDrop = false
     singlePlayer.objOutsideTenCounter = nil
+    singlePlayer.objLeaveOutsideTent = nil
     return singlePlayer
 end
 
@@ -1293,8 +1293,10 @@ function findPlayerCardsInTable(destTable,guidsFromPath)
     destTable.objHiddenZone = getObjectFromGUID(pathTags[5])
     if destTable.objHiddenZone == nil then
         return false
-    else
-        printToAll("Found Hidden zone")
+    end
+    destTable.objLeaveOutsideTent = getObjectFromGUID(pathTags[6])
+    if destTable.objLeaveOutsideTent == nil then
+        return false
     end
 end
 
@@ -1311,6 +1313,10 @@ function hideAllStayLeaveCards()
         if m_tbPlayerInformation[v].objCardLeave ~= nil then
             m_tbPlayerInformation[v].objCardLeave.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey"})
             m_tbPlayerInformation[v].objCardLeave.interactable = false
+        end
+        if m_tbPlayerInformation[v].objLeaveOutsideTent ~= nil then
+            m_tbPlayerInformation[v].objLeaveOutsideTent.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey"})
+            m_tbPlayerInformation[v].objLeaveOutsideTent.interactable = false
         end
     end
 end
@@ -1897,6 +1903,7 @@ function createButtons()
     createOverflowShowHideButton()
     createInteractableDeckButton()
     createUtilityLocationsToggleButton()
+    createCardsInteractToggleButton()
     
     createPlayerOptionMoveDebugToggle()
     createPlayerOptionPlayersInDebugToggle()
@@ -2137,6 +2144,28 @@ function updateUtilityLocationsToggleTransform(leftTopMostOffset)
     button_parameters.position[3] = m_vecDebugButtonLocation[3] + leftTopMostOffset[3] + 3
     
     self.editButton(button_parameters)
+end
+
+function createCardsInteractToggleButton()
+    local button_parameters = {}
+    
+    button_parameters.click_function = "BTNCLICK_CardsInteract"
+    button_parameters.function_owner = self
+    button_parameters.position = {}
+    button_parameters.position[1] = m_vecDebugButtonLocation[1] - 6
+    button_parameters.position[2] = m_vecDebugButtonLocation[2]
+    button_parameters.position[3] = m_vecDebugButtonLocation[3] + 6
+    button_parameters.rotation = m_vecDebugButtonRotation
+    button_parameters.label = "Cards Inter"
+    button_parameters.tooltip = "Make cards in hand interactable"
+    button_parameters.width = 2000
+    button_parameters.height = 800
+    button_parameters.font_size = 240
+    
+    self.createButton(button_parameters)
+    --Set reference
+    m_iBtnCardsInteract = m_btnNumberOfButtons
+    m_btnNumberOfButtons = m_btnNumberOfButtons + 1
 end
 
 function createPlayerOptionMoveDebugToggle()
@@ -2747,6 +2776,18 @@ function BTNCLICK_DebugColorYellow(obj, player_clicker_color, alt_click)
     end
 end
 
+function BTNCLICK_CardsInteract(obj, player_clicker_color, alt_click)
+    local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
+    for i, v in ipairs(colorsInOrder) do
+        if m_tbPlayerInformation[v].objCardStay ~= nil then
+            m_tbPlayerInformation[v].objCardStay.interactable = true
+        end
+        if m_tbPlayerInformation[v].objCardLeave ~= nil then
+            m_tbPlayerInformation[v].objCardLeave.interactable = true
+        end
+    end
+end
+
 function updateColorsForDebugLocation()
     local color = string.lower(m_sDebugColor)
     setButtonColor(m_iBtnDebugGreen,getColorGrey())
@@ -2849,7 +2890,6 @@ function giveStayLeaveCardsToPlayers()
             if m_tbPlayerInformation[v].objCardStay ~= nil then
                 --Deal to player
                 m_tbPlayerInformation[v].objCardStay.deal(1,v)
-                m_tbPlayerInformation[v].objCardStayInZone = true
                 m_tbPlayerInformation[v].objCardStayInDrop = true
                 
                 --Flip Face Up only leave card
@@ -2861,13 +2901,17 @@ function giveStayLeaveCardsToPlayers()
             if m_tbPlayerInformation[v].objCardLeave ~= nil then
                 --Deal to Player
                 m_tbPlayerInformation[v].objCardLeave.deal(1,v)
-                 m_tbPlayerInformation[v].objCardLeaveInZone = true
                  m_tbPlayerInformation[v].objCardLeaveInDrop = true
+                 m_tbPlayerInformation[v].objCardLeave.registerCollisions()
                 --Flip Face Down only leave card
                 flipCardFaceDown(m_tbPlayerInformation[v].objCardLeave)
                 --Make visible / Interactable
                 m_tbPlayerInformation[v].objCardLeave.setInvisibleTo()
                 m_tbPlayerInformation[v].objCardLeave.interactable = true
+            end
+            if m_tbPlayerInformation[v].objLeaveOutsideTent ~= nil then
+                m_tbPlayerInformation[v].objLeaveOutsideTent.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey"})
+                m_tbPlayerInformation[v].objLeaveOutsideTent.interactable = false
             end
         end
     end
@@ -2918,6 +2962,18 @@ function isCardOutOfHiddenZone(guidOfCard) --true means it is out
     return true
 end
 
+function isCardOutOfHiddenZone_color(guidOfCard, color) --true means it is out
+    if m_tbPlayerInformation[color].objHiddenZone == nil then
+        return true
+    end
+    for j, w in ipairs(m_tbPlayerInformation[color].objHiddenZone.getObjects()) do
+        if w.guid == guidOfCard then
+            return false
+        end
+    end
+    return true
+end
+
 function canFlipCardsOver()
     if m_tbPlayerInformation == nil then
         printToAll("canFlipCardsOver: PlayerInformation is blank")
@@ -2935,6 +2991,7 @@ function canFlipCardsOver()
             
         end
     end
+    m_sWarningIsOn = ""
     return true
 end
 
@@ -2953,6 +3010,7 @@ function flipOverAllStayLeave()
             if isCardOutOfHiddenZone(m_tbPlayerInformation[v].objCardLeave.guid) then
                 flipCardFaceUp(m_tbPlayerInformation[v].objCardLeave)
                 playersLeavingAddPlayers(v)
+                playerLeavingShowLeavingCard(v)
             end
         end
     end
@@ -2971,6 +3029,11 @@ function hideLeaveCardsOfNotInPlayers()
                 m_tbPlayerInformation[v].objCardLeave.interactable = false
             m_tbPlayerInformation[v].objCardStay.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey"})
             m_tbPlayerInformation[v].objCardStay.interactable = false
+            
+            if m_tbPlayerInformation[v].objLeaveOutsideTent ~= nil then
+                m_tbPlayerInformation[v].objLeaveOutsideTent.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey"})
+                m_tbPlayerInformation[v].objLeaveOutsideTent.interactable = false
+            end
         end
     end
     return true
@@ -3051,6 +3114,55 @@ function playersLeavingActionPlayers_givingGems_inner(vec,_lower,_upper)
     m_tbCurrentGems_current = m_tbCurrentGems_current + 1
     vec = getRandomVectorFromLocation(vec,_lower,_upper)
     obj.setPositionSmooth(vec,false,false)
+end
+
+function playersLeavingMoveLeavingCard(color)
+    --This would be fine but the cards have collision
+    --for like a whole second after you move them
+    --then freeze in place... it just didn't work.
+    --Use playerLeavingShowLeavingCard instead.
+    if m_tbPlayerInformation == nil then
+        printToAll("hideLeaveCardsOfNotInPlayers: PlayerInformation is blank")
+        return false
+    end
+    local counter = m_tbPlayerInformation[color].objOutsideTenCounter
+    local leaveCard = m_tbPlayerInformation[color].objCardLeave
+    leaveCard.unregisterCollisions()
+    leaveCard.setPositionSmooth(counter.getPosition(),false,false)
+    leaveCard.interactable = false
+    local goalRot = Vector(0,0,0)
+    if color == "Pink" or color == "Purple" then
+        goalRot[2] = 270
+    elseif color == "Green" or color == "Blue" then
+        goalRot[2] = 180
+    elseif color == "Orange" or color == "Yellow" then
+        goalRot[2] = 90
+    end
+    leaveCard.setRotationSmooth(goalRot,false,false);
+    
+    m_tbPlayerInformation[color].objCardStay.deal(1,color)
+    m_tbPlayerInformation[color].objCardStay.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey"})
+    m_tbPlayerInformation[color].objCardStay.interactable = false
+    return true
+end
+
+function playerLeavingShowLeavingCard(color)
+    if m_tbPlayerInformation == nil then
+        printToAll("hideLeaveCardsOfNotInPlayers: PlayerInformation is blank")
+        return false
+    end
+    m_tbPlayerInformation[color].objCardStay.deal(1,color)
+    m_tbPlayerInformation[color].objCardStay.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey"})
+    m_tbPlayerInformation[color].objCardStay.interactable = false
+    
+    m_tbPlayerInformation[color].objCardLeave.deal(1,color)
+    m_tbPlayerInformation[color].objCardLeave.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey"})
+    m_tbPlayerInformation[color].objCardLeave.interactable = false
+    
+    if m_tbPlayerInformation[color].objLeaveOutsideTent ~= nil then
+        m_tbPlayerInformation[color].objLeaveOutsideTent.setInvisibleTo()
+        m_tbPlayerInformation[color].objLeaveOutsideTent.interactable = false
+    end
 end
 --
 --
@@ -3146,14 +3258,15 @@ function onObjectPickUp(colorName, obj)
     for i, v in ipairs(colorsInOrder) do
         if obj.guid == m_tbPlayerInformation[v].objCardStay.guid then
             m_tbPlayerInformation[v].objCardStayInDrop = false
-            if m_tbPlayerInformation[v].objCardStayInZone then
+            
+            if isCardOutOfHiddenZone_color(obj.guid, v) == false then
                 flipCardFaceDown(m_tbPlayerInformation[v].objCardStay)
             end
             --printToAll(v .. " stay pickup ")
         end
         if obj.guid == m_tbPlayerInformation[v].objCardLeave.guid then
             m_tbPlayerInformation[v].objCardLeaveInDrop = false
-            if m_tbPlayerInformation[v].objCardLeaveInZone then
+            if isCardOutOfHiddenZone_color(obj.guid, v) == false then
                 flipCardFaceDown(m_tbPlayerInformation[v].objCardLeave)
             end
             --printToAll(v .. " leave pickup ")
