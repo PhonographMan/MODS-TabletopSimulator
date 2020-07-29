@@ -195,6 +195,7 @@ function mainButton()
         end
     elseif m_bWaitingForPlayerResponce then
         printToAll("Things might get dangerous...")
+        printPlayersWhoWereWaitingFor()
     else
         if retractAllCardsToDeck() then
             if m_bRoundOverDueToHazzards then
@@ -1666,14 +1667,23 @@ function createMoneyBagsTable()
     moneyBagsTable.gems = getObjectFromGUID(pathTags[2])
     if moneyBagsTable.gems == nil or moneyBagsTable.gems == false then
         printToAll("createMoneyBagsTable: Could not find Gems bag")
+    else
+        moneyBagsTable.gems.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey","Black"})
+        moneyBagsTable.gems.interactable = false
     end
     moneyBagsTable.gold = getObjectFromGUID(pathTags[3])
     if moneyBagsTable.gold == nil or moneyBagsTable.gold == false then
         printToAll("createMoneyBagsTable: Could not find Gold bag")
+    else
+        moneyBagsTable.gold.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey","Black"})
+        moneyBagsTable.gold.interactable = false
     end
     moneyBagsTable.obsidian = getObjectFromGUID(pathTags[4])
     if moneyBagsTable.obsidian == nil or moneyBagsTable.obsidian == false then
         printToAll("createMoneyBagsTable: Could not find Obsidian bag")
+    else
+        moneyBagsTable.obsidian.setInvisibleTo({"Yellow","Orange","Blue","Green","Purple","Pink","White","Red","Grey","Black"})
+        moneyBagsTable.obsidian.interactable = false
     end
     moneyBagsTable.artifact_1 = getObjectFromGUID(pathTags[5])
     if moneyBagsTable.artifact_1 == nil or moneyBagsTable.artifact_1 == false then
@@ -2917,10 +2927,13 @@ function giveStayLeaveCardsToPlayers()
     end
 end
 
-function areAllCardsOut()
+function areAllCardsOut(printToBlack)
     if m_tbPlayerInformation == nil then
         printToAll("areAllCardsOut: PlayerInformation is blank")
         return false
+    end
+    if printToBlack == nil then
+        printToBlack = false
     end
     local colorsInOrder = {"Green","Blue","Purple","Pink","White","Red","Orange","Yellow"}
     for i, v in ipairs(colorsInOrder) do
@@ -2938,6 +2951,9 @@ function areAllCardsOut()
                     --A card is in the hand
                     --printToAll(v .. " in the hands")
                     return false
+                end
+                if printToBlack then
+                    printToColor(v .. " is fine","Black")
                 end
             else
                 printToAll("areAllCardsOut: Couldn't find" .. v .. " cards. Probably an issue")
@@ -3163,6 +3179,10 @@ function playerLeavingShowLeavingCard(color)
         m_tbPlayerInformation[color].objLeaveOutsideTent.setInvisibleTo()
         m_tbPlayerInformation[color].objLeaveOutsideTent.interactable = false
     end
+end
+
+function printPlayersWhoWereWaitingFor()
+    areAllCardsOut(true)
 end
 --
 --
